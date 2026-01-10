@@ -1,0 +1,4479 @@
+/* =========================================
+   CSS Variables
+   ========================================= */
+:root {
+  --dollars-z-index-base: 90;
+  --dollars-z-index-smiley: 99;
+  --dollars-z-index-context: 95;
+  --dollars-bg: #fff;
+  --dollars-bg-hover: rgba(0, 0, 0, 0.04);
+  --dollars-border: rgba(0, 0, 0, 0.08);
+  --dollars-shadow: rgba(0, 0, 0, 0.1);
+  /* Background Variables - 延迟加载，默认为 none */
+  --dollars-bg-pattern: none;
+  --dollars-bg-pattern-url: url('https://lsky.ry.mk/i/2026/01/03/background.svg');
+  --dollars-text: #333;
+  --dollars-text-secondary: #666;
+  --dollars-text-placeholder: #999;
+  --dollars-glass-border: rgba(255, 255, 255, 0.3);
+  --dollars-glass-highlight: rgba(255, 255, 255, 0.3);
+  /* Glass Surface Variables */
+  --dollars-glass-bg: rgba(255, 255, 255, 0.25);
+  --dollars-glass-blur: blur(12px) saturate(1.8) brightness(1.05);
+  --dollars-glass-shadow:
+    0 8px 32px 0 rgba(31, 38, 135, 0.15),
+    0 2px 16px 0 rgba(31, 38, 135, 0.08),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.5),
+    inset 0 -1px 0 0 rgba(255, 255, 255, 0.2);
+  --dollars-glass-border-color: rgba(255, 255, 255, 0.35);
+}
+
+/* 只在窗口可见时加载背景图片 */
+#dollars-chat-window.visible {
+  --dollars-bg-pattern: var(--dollars-bg-pattern-url);
+}
+
+
+html[data-theme="dark"] {
+  --dollars-bg: #1a1a1a;
+  --dollars-bg-hover: rgba(255, 255, 255, 0.08);
+  --dollars-border: rgba(255, 255, 255, 0.12);
+  --dollars-shadow: rgba(0, 0, 0, 0.3);
+  --dollars-text: #e0e0e0;
+  --dollars-text-secondary: #999;
+  --dollars-text-placeholder: #666;
+  --dollars-glass-border: rgba(255, 255, 255, 0.1);
+  --dollars-glass-highlight: rgba(255, 255, 255, 0.1);
+  /* Glass Surface Variables - Dark Mode */
+  --dollars-glass-bg: rgba(255, 255, 255, 0.08);
+  --dollars-glass-blur: blur(12px) saturate(1.8) brightness(1.15);
+  --dollars-glass-shadow:
+    0 8px 32px 0 rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.15),
+    inset 0 -1px 0 0 rgba(255, 255, 255, 0.08);
+  --dollars-glass-border-color: rgba(255, 255, 255, 0.15);
+}
+
+
+/* =========================================
+   Global Scrollbar Style
+   ========================================= */
+#dollars-chat-root *::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+#dollars-chat-root *::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+#dollars-chat-root *::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--primary-color), transparent 75%);
+  border-radius: 10px;
+}
+
+#dollars-chat-root *::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--primary-color), transparent 50%);
+}
+
+#dollars-chat-root * {
+  box-sizing: border-box;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--primary-color), transparent 75%) transparent;
+}
+
+/* =========================================
+   Chat Root Container
+   ========================================= */
+#dollars-chat-root {
+  color: var(--dollars-text);
+}
+
+/* =========================================
+   Chat Window - 液态玻璃效果
+   ========================================= */
+#dollars-chat-window {
+  position: fixed;
+  bottom: 80px;
+  right: 20px;
+  width: 400px;
+  height: 550px;
+  min-width: 320px;
+  min-height: 400px;
+  max-width: 90vw;
+  max-height: 85vh;
+  z-index: var(--dollars-z-index-base);
+  display: flex;
+  flex-direction: column;
+  border-radius: 20px;
+  /* 简化背景 - 移除液态璃璃效果以提升性能 */
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background-clip: padding-box;
+  overflow: hidden;
+  /* Visibility Toggle */
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(20px) scale(0.9);
+  transition: opacity 0.3s ease-out, transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+#dollars-chat-window.visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0) scale(1);
+}
+
+html[data-theme="dark"] #dollars-chat-window {
+  background: rgba(30, 30, 30, 0.9);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+}
+
+#dollars-chat-window.maximized {
+  top: 10px !important;
+  left: 10px !important;
+  right: 10px !important;
+  bottom: 10px !important;
+  width: auto !important;
+  height: auto !important;
+  max-width: none !important;
+  max-height: none !important;
+  border-radius: 12px;
+  transform: none !important;
+  /* Reset transform just in case */
+}
+
+#dollars-chat-window.mobile {
+  /* Use positioning + auto margins for centering, not transform */
+  /* This allows the open/close animation transform to work properly */
+  top: 4vh !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: auto !important;
+  width: 95vw !important;
+  height: 92vh !important;
+  max-width: 600px;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  border-radius: 20px;
+}
+
+/* Ensure the visible state animation works correctly for mobile */
+#dollars-chat-window.mobile.visible {
+  transform: translateY(0) scale(1);
+}
+
+/* =========================================
+   Content Panes Container
+   ========================================= */
+#dollars-content-panes {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+/* =========================================
+   Sidebar
+   ========================================= */
+#dollars-sidebar {
+  width: 25%;
+  height: 100%;
+  max-width: 320px;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  /* Remove border, use subtle shadow for separation if needed by desktop layout */
+  border-right: none;
+  /* Subtle inner glow for separation */
+  box-shadow: inset -1px 0 0 0 rgba(0, 0, 0, 0.03);
+  background-color: var(--dollars-bg);
+}
+
+#dollars-sidebar-search-container {
+  padding: 8px;
+  border-bottom: 1px solid var(--dollars-border);
+  flex-shrink: 0;
+}
+
+#dollars-sidebar-search-input {
+  display: flex;
+  align-items: center;
+  position: relative;
+  border-radius: 100px;
+  border: 1px solid var(--dollars-border);
+  background-color: var(--dollars-bg);
+  transition: 0.3s ease-in-out;
+  padding: 6px 12px;
+  width: 100%;
+  box-sizing: border-box;
+  font-size: 13px;
+  color: var(--dollars-text);
+}
+
+#dollars-sidebar-search-input:focus {
+  outline: 0;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 10px rgba(240, 145, 153, 0.6);
+}
+
+html[data-theme="dark"] #dollars-sidebar-search-input {
+  background-color: #3a3a3a;
+}
+
+#dollars-sidebar-search-input::placeholder {
+  color: var(--dollars-text-placeholder);
+}
+
+#dollars-conversation-list {
+  flex-grow: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px;
+}
+
+/* Conversation Item */
+.conversation-item {
+  display: flex;
+  align-items: center;
+  padding: 5px 10px;
+  gap: 12px;
+  cursor: pointer;
+  position: relative;
+  border-radius: 15px;
+  transition: background-color 0.2s, box-shadow 0.2s;
+}
+
+.conversation-item:hover {
+  background-color: var(--dollars-bg-hover);
+}
+
+.conversation-item.active {
+  background: color-mix(in srgb, var(--primary-color), #ffffff 30%);
+  color: #fff;
+}
+
+html[data-theme="dark"] .conversation-item.active {
+  background: color-mix(in srgb, var(--primary-color), #180518 60%);
+}
+
+.conversation-item.active .dollars-conv-last-message,
+.conversation-item.active .dollars-conv-nickname,
+.conversation-item.active .dollars-conv-timestamp {
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.conversation-item .avatar {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  object-fit: cover;
+  background-color: #f3f3f3;
+}
+
+html[data-theme="dark"] .conversation-item .avatar {
+  background-color: #444;
+}
+
+.conversation-item .dollars-conv-content {
+  flex-grow: 1;
+  overflow: hidden;
+}
+
+.conversation-item .dollars-conv-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.conversation-item .dollars-conv-nickname {
+  color: var(--dollars-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conversation-item .dollars-conv-timestamp {
+  font-size: 11px;
+  color: var(--dollars-text-secondary);
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+.conversation-item .dollars-conv-last-message {
+  font-size: 12px;
+  color: var(--dollars-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-top: 2px;
+}
+
+.conversation-item .unread-badge {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background-color: var(--primary-color);
+  color: #fff;
+  font-size: 10px;
+  font-weight: bold;
+  padding: 2px 6px;
+  border-radius: 10px;
+  min-width: 16px;
+  text-align: center;
+}
+
+/* =========================================
+   Narrow Layout (Single View Mode)
+   ========================================= */
+#dollars-chat-window.is-narrow #dollars-sidebar {
+  width: 100%;
+  max-width: none;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+#dollars-chat-window.is-narrow.mobile-chat-active #dollars-sidebar {
+  transform: translateX(-100%);
+}
+
+#dollars-chat-window.is-narrow #dollars-main-chat {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  transform: translateX(100%);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+#dollars-chat-window.is-narrow.mobile-chat-active #dollars-main-chat {
+  transform: translateX(0);
+}
+
+#dollars-chat-window.is-narrow #dollars-content-panes {
+  overflow: hidden;
+}
+
+/* Main chat content area */
+#dollars-main-chat {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+  background-color: var(--dollars-bg);
+  /* 性能优化: 创建新的 stacking context，防止背景影响内容渲染 */
+  isolation: isolate;
+  z-index: 0;
+}
+
+/* Main Chat Background Effects */
+#dollars-main-chat::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  /* 关键：z-index: -1 确保背景在内容之下 */
+  z-index: -1;
+  pointer-events: none;
+  will-change: opacity;
+  /* GPU 加速 */
+  opacity: 0;
+  /* Default hidden until mode is applied */
+  transition: opacity 0.3s ease;
+}
+
+html[data-theme="dark"] #dollars-main-chat::before {
+  /* Default hidden handled by opacity: 0 above */
+}
+
+/* =========================================
+   Background Mode Overrides
+   ========================================= */
+
+/* Mode: Transparent */
+#dollars-chat-root[data-bg-mode="transparent"] #dollars-main-chat::before {
+  display: none !important;
+}
+
+/* Mode: Tint - colored gradient background */
+#dollars-chat-root[data-bg-mode="tint"] #dollars-main-chat::before {
+  background-image:
+    var(--dollars-bg-pattern),
+    linear-gradient(160deg,
+      color-mix(in srgb, var(--primary-color), #a0c4ff 50%) 0%,
+      color-mix(in srgb, var(--primary-color), #ffffff 50%) 50%,
+      color-mix(in srgb, var(--primary-color), #ffc6ff 50%) 100%);
+  background-repeat: repeat, no-repeat;
+  background-position: center, center;
+  background-size: 400px, cover;
+  background-blend-mode: overlay, normal;
+  opacity: 0.65;
+}
+
+/* Mode: Lines - minimal line pattern */
+#dollars-chat-root[data-bg-mode="lines"] #dollars-main-chat::before {
+  background-image: none;
+  background-color: color-mix(in srgb, var(--primary-color), #ffffff 94%);
+  opacity: 0.2;
+}
+
+#dollars-chat-root[data-bg-mode="lines"] #dollars-main-chat::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-color: color-mix(in srgb, var(--primary-color), #ffffff 70%);
+  -webkit-mask-image: var(--dollars-bg-pattern);
+  mask-image: var(--dollars-bg-pattern);
+  -webkit-mask-repeat: repeat;
+  mask-repeat: repeat;
+  -webkit-mask-size: 400px;
+  opacity: 0.7;
+  z-index: -1;
+  pointer-events: none;
+}
+
+html[data-theme="dark"] #dollars-chat-root[data-bg-mode="lines"] #dollars-main-chat::after {
+  opacity: 0.1;
+}
+
+/* Dark mode backgrounds */
+html[data-theme="dark"] #dollars-chat-root[data-bg-mode="lines"] #dollars-main-chat::before {
+  background-image: none !important;
+  background-color: transparent !important;
+  -webkit-mask-image: none !important;
+  mask-image: none !important;
+}
+
+html[data-theme="dark"] #dollars-chat-root[data-bg-mode="tint"] #dollars-main-chat::before {
+  background-image:
+    var(--dollars-bg-pattern),
+    linear-gradient(160deg,
+      color-mix(in srgb, var(--primary-color), #a0c4ff 50%) 0%,
+      color-mix(in srgb, var(--primary-color), #ffffff 50%) 50%,
+      color-mix(in srgb, var(--primary-color), #ffc6ff 50%) 100%);
+  background-repeat: repeat, no-repeat;
+  background-position: center, center;
+  background-size: 400px, cover;
+  background-blend-mode: overlay, normal;
+
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+
+html[data-theme="dark"] #dollars-chat-root[data-bg-mode="lines"] #dollars-main-chat::before {
+  opacity: 0.25;
+}
+
+html[data-theme="dark"] #dollars-chat-root[data-bg-mode="tint"] #dollars-main-chat::before {
+  opacity: 0.3;
+}
+
+
+
+/* =========================================
+   Chat Header
+   ========================================= */
+.chat-header {
+  /* Glass Effect */
+  background: var(--dollars-glass-bg);
+  backdrop-filter: var(--dollars-glass-blur);
+  -webkit-backdrop-filter: var(--dollars-glass-blur);
+  /* No border to avoid black line issue; use shadow for subtle bottom separation */
+  border-bottom: none;
+  /* Subtle shadow to hint at separation from content */
+  box-shadow: 0 1px 0 0 rgba(0, 0, 0, 0.02);
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 15px;
+  cursor: move;
+  flex-shrink: 0;
+
+  /* Absolute positioning for glass effect overlay */
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+  height: 40px;
+  box-sizing: border-box;
+  /* Ensure padding doesn't affect width */
+
+  z-index: 10002;
+}
+
+html[data-theme="dark"] .chat-header {
+  background: var(--dollars-bg);
+  border-bottom: none;
+  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.02);
+}
+
+.chat-header .title-wrapper {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  min-width: 0;
+  padding: 0 4px;
+  /* Reduced padding */
+  gap: 8px;
+  /* Reduced gap */
+  pointer-events: none;
+}
+
+.header-chat-icon {
+  width: 30px;
+  /* Slightly smaller */
+  height: 30px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  /* Add shadow */
+}
+
+.header-text-column {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  /* Tighten text */
+  min-width: 0;
+  justify-content: center;
+}
+
+.chat-header .title,
+.header-main-title {
+  font-size: 13px;
+  /* Slightly smaller for compactness */
+  font-weight: 700;
+  color: var(--dollars-text);
+  letter-spacing: 0.2px;
+  line-height: 1.2;
+}
+
+.chat-header .online-status {
+  font-size: 10px;
+  /* Smaller status text */
+  color: var(--dollars-text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  opacity: 0.85;
+  line-height: 1.2;
+}
+
+.chat-header .online-dot {
+  width: 6px;
+  height: 6px;
+  background-color: #4CAF50;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.chat-header .header-buttons {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.chat-header .header-btn {
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--dollars-text-secondary);
+  transition: background-color 0.2s;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 18px;
+}
+
+.chat-header .header-btn:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+html[data-theme="dark"] .chat-header .header-btn:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+/* Restored Header Buttons */
+#dollars-search-btn {
+  background-image: url('data:image/svg+xml;charset=UTF-8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%23555" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>');
+}
+
+html[data-theme="dark"] #dollars-search-btn {
+  background-image: url('data:image/svg+xml;charset=UTF-8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%23bbb" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>');
+}
+
+#dollars-maximize-btn {
+  background-image: url('data:image/svg+xml;charset=UTF-8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%23555" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>');
+}
+
+html[data-theme="dark"] #dollars-maximize-btn {
+  background-image: url('data:image/svg+xml;charset=UTF-8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%23bbb" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>');
+}
+
+#dollars-chat-window.maximized #dollars-maximize-btn {
+  background-image: url('data:image/svg+xml;charset=UTF-8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%23555" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/></svg>');
+}
+
+html[data-theme="dark"] #dollars-chat-window.maximized #dollars-maximize-btn {
+  background-image: url('data:image/svg+xml;charset=UTF-8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%23bbb" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/></svg>');
+}
+
+.chat-header .close-btn {
+  background-image: url('data:image/svg+xml;charset=UTF-8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%23555" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>');
+}
+
+html[data-theme="dark"] .chat-header .close-btn {
+  background-image: url('data:image/svg+xml;charset=UTF-8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%23bbb" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>');
+}
+
+.chat-header .header-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* =========================================
+   Chat Body
+   ========================================= */
+.chat-body {
+  /* 性能优化: 启用 contain 隔离渲染 */
+  contain: layout style paint;
+  flex-grow: 1;
+  /* 强制显示滚动条轨道，防止加载时的布局跳动 */
+  overflow-y: scroll;
+  overflow-x: hidden;
+  padding: 10px;
+  padding-top: 50px;
+  /* 使用 padding-bottom 替代 margin-bottom，允许内容滚动到输入框下方以展示磨砂玻璃效果 */
+  padding-bottom: 80px;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  min-height: 0;
+  overflow-anchor: auto;
+  background: transparent;
+}
+
+
+.chat-body.loading .chat-list {
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+/* Hide list completely when loading context/jumping to hide scroll jump */
+.chat-body.context-loading .chat-list {
+  opacity: 0 !important;
+  transition: opacity 0.05s ease;
+}
+
+/* =========================================
+   Message Skeleton Loading Animation
+   ========================================= */
+.message-skeleton-container {
+  display: flex;
+  flex-direction: column;
+  padding: 10px;
+  gap: 14px;
+  position: absolute;
+  top: 50px;
+  left: 0;
+  right: 0;
+  /* Leave space for chat input area */
+  bottom: 80px;
+  z-index: 10;
+  pointer-events: none;
+  /* Clip excess skeletons that don't fit */
+  overflow: hidden;
+  animation: skeleton-fade-in 0.3s ease-out;
+  /* Gradient fade at bottom to avoid abrupt cutoff */
+  -webkit-mask-image: linear-gradient(to bottom, black 0%, black 85%, transparent 100%);
+  mask-image: linear-gradient(to bottom, black 0%, black 85%, transparent 100%);
+}
+
+@keyframes skeleton-fade-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+/* Smooth fade-out when loading completes */
+.message-skeleton-container.fading-out {
+  animation: skeleton-fade-out 0.3s ease-out forwards;
+}
+
+@keyframes skeleton-fade-out {
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+  }
+}
+
+.message-skeleton {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  animation: skeleton-fade-enter 0.4s ease-out backwards;
+}
+
+.message-skeleton.self {
+  flex-direction: row-reverse;
+}
+
+@keyframes skeleton-fade-enter {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+/* 头像骨架 */
+.skeleton-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background-color: color-mix(in srgb, var(--primary-color), var(--dollars-bg) 85%);
+}
+
+html[data-theme="dark"] .skeleton-avatar {
+  background-color: rgba(255, 255, 255, 0.12);
+}
+
+/* 消息内容区域 */
+.skeleton-content {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 70%;
+}
+
+.message-skeleton.self .skeleton-content {
+  align-items: flex-end;
+}
+
+
+
+/* 气泡骨架 */
+.skeleton-bubble {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 16px;
+  border-radius: 18px;
+  background-color: color-mix(in srgb, var(--primary-color), var(--dollars-bg) 90%);
+  min-width: 100px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+html[data-theme="dark"] .skeleton-bubble {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+.message-skeleton.self .skeleton-bubble {
+  background-color: color-mix(in srgb, var(--primary-color), var(--dollars-bg) 75%);
+}
+
+html[data-theme="dark"] .message-skeleton.self .skeleton-bubble {
+  background-color: color-mix(in srgb, var(--primary-color), transparent 70%);
+}
+
+/* 文本行骨架 */
+.skeleton-text {
+  height: 16px;
+  border-radius: 8px;
+  background-color: color-mix(in srgb, var(--primary-color), var(--dollars-bg) 75%);
+  min-width: 50px;
+}
+
+html[data-theme="dark"] .skeleton-text {
+  background-color: rgba(255, 255, 255, 0.12);
+}
+
+.message-skeleton.self .skeleton-text {
+  background-color: color-mix(in srgb, var(--primary-color), var(--dollars-bg) 60%);
+}
+
+html[data-theme="dark"] .message-skeleton.self .skeleton-text {
+  background-color: color-mix(in srgb, var(--primary-color), transparent 50%);
+}
+
+/* 波浪闪烁动画 */
+.skeleton-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+
+.skeleton-shimmer::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.6) 50%,
+      transparent 100%);
+  background-size: 200% 100%;
+  animation: skeleton-wave 1.2s ease-in-out infinite;
+}
+
+html[data-theme="dark"] .skeleton-shimmer::after {
+  background: linear-gradient(90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.2) 50%,
+      transparent 100%);
+  background-size: 200% 100%;
+}
+
+@keyframes skeleton-wave {
+  0% {
+    background-position: 200% 0;
+  }
+
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* Legacy Loader (kept for backwards compatibility) */
+.dollars-loader {
+  position: absolute;
+  top: 40%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: none;
+  /* Hidden by default, skeleton is preferred */
+  gap: 6px;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.dollars-loader-dot {
+  width: 8px;
+  height: 8px;
+  background-color: var(--primary-color);
+  border-radius: 50%;
+  animation: dollars-bounce 0.6s cubic-bezier(0.19, 0.57, 0.3, 0.98) infinite alternate;
+}
+
+.dollars-loader-dot:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.dollars-loader-dot:nth-child(2) {
+  animation-delay: 0.15s;
+  opacity: 0.8;
+}
+
+.dollars-loader-dot:nth-child(3) {
+  animation-delay: 0.3s;
+  opacity: 0.6;
+}
+
+@keyframes dollars-bounce {
+  from {
+    transform: translateY(0);
+  }
+
+  to {
+    transform: translateY(-12px);
+  }
+}
+
+
+.chat-list {
+  display: flex;
+  flex-direction: column;
+  /* 性能优化: 启用布局和样式隔离 */
+  contain: layout style;
+  transition: opacity 0.3s ease;
+}
+
+/* =========================================
+   Message Item
+   ========================================= */
+.chat-message {
+  position: relative;
+  /* 性能优化: 允许浏览器跳过离屏渲染 */
+  overflow: visible !important;
+  content-visibility: auto;
+  contain-intrinsic-size: 80px;
+  overflow-clip-margin: 5px;
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  align-items: flex-start;
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  transition: transform 0.4s cubic-bezier(0.19, 1, 0.22, 1), opacity 0.3s ease-out;
+  will-change: transform, opacity;
+  transform-origin: center bottom;
+}
+
+.chat-message.self {
+  flex-direction: row-reverse;
+}
+
+.chat-message.self .msg-content,
+.chat-message.self .message-content {
+  align-items: flex-end;
+}
+
+.chat-message.is-grouped-with-prev {
+  /* margin-bottom handled by is-grouped-with-next of previous message */
+}
+
+.chat-message.is-grouped-with-next {
+  margin-bottom: 2px;
+}
+
+.chat-message.is-grouped-with-prev .avatar {
+  visibility: hidden;
+  height: 0 !important;
+  margin: 0 !important;
+  border: none !important;
+}
+
+/* 隐藏外部昵称 - 始终隐藏，使用气泡内昵称 */
+.chat-message .nickname {
+  display: none !important;
+}
+
+.chat-message .avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  cursor: pointer;
+  flex-shrink: 0;
+  object-fit: cover;
+  background-color: #f3f3f3;
+  transition: box-shadow 0.3s;
+  -webkit-touch-callout: none;
+  user-select: none;
+}
+
+html[data-theme="dark"] .chat-message .avatar {
+  background-color: #444;
+}
+
+/* =========================================
+   Avatar Online Status Indicator
+   ========================================= */
+.chat-message::after {
+  content: "";
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  background-color: #4CAF50;
+  border: 2px solid var(--dollars-bg);
+  border-radius: 50%;
+  z-index: 5;
+  top: 23px;
+  left: 23px;
+  pointer-events: none;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+  opacity: 0;
+  transform: scale(0);
+  transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s ease;
+}
+
+.chat-message:has(.avatar.online)::after {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.chat-message.self::after {
+  left: auto;
+  right: -2px;
+}
+
+.chat-message.is-grouped-with-prev::after {
+  opacity: 0 !important;
+  transform: scale(0) !important;
+}
+
+.chat-message .message-content,
+.chat-message .msg-content {
+  max-width: 75%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+/* =========================================
+   Message Highlighting (Focus Mode)
+   ========================================= */
+.chat-list.focus-mode .chat-message:not(.message-highlight) {
+  filter: blur(4px);
+  opacity: 0.6;
+  transition: filter 0.3s ease, opacity 0.3s ease;
+}
+
+.chat-message.message-highlight {
+  position: relative;
+  z-index: 10;
+  transform: scale(1.02);
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.chat-message.message-highlight .bubble {
+  box-shadow: 0 0 20px rgba(var(--primary-rgb), 0.4);
+}
+
+/* =========================================
+   Message Bubble
+   ========================================= */
+.chat-message .bubble {
+  display: flow-root;
+  padding: 6px 10px 6px;
+  border-radius: 0 12px 12px 12px;
+  word-wrap: break-word;
+  overflow-wrap: anywhere;
+  /* Ensure long words break */
+  background-color: #fff;
+  box-shadow: 0 1px 2px rgba(16, 35, 47, 0.15);
+  color: var(--dollars-text);
+  font-size: 14px;
+  max-width: min(40dvh, 100%);
+  position: relative;
+  transition: background 0.3s ease;
+}
+
+html[data-theme="dark"] .chat-message .bubble {
+  background-color: #212121;
+}
+
+.chat-message.self .bubble {
+  border-radius: 12px 0 12px 12px;
+  background: color-mix(in srgb, var(--primary-color), #ffffff 80%);
+}
+
+html[data-theme="dark"] .chat-message.self .bubble {
+  background-color: color-mix(in srgb, var(--primary-color), #180518 60%);
+}
+
+/* 连续消息圆角调整 */
+.chat-message:not(.self).is-grouped-with-prev .bubble {
+  border-top-left-radius: 4px !important;
+}
+
+.chat-message.self.is-grouped-with-prev .bubble {
+  border-top-right-radius: 4px !important;
+}
+
+.bubble.sticker-mode {
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  border: none !important;
+}
+
+/* =========================================
+   气泡内昵称 (Bubble Nickname)
+   ========================================= */
+.bubble-nickname {
+  display: block;
+  width: 100%;
+  font-size: 12px;
+  margin-bottom: 4px;
+  line-height: 1.2;
+  user-select: none;
+  color: var(--nick-color, var(--primary-color));
+}
+
+html[data-theme="dark"] .bubble-nickname {
+  color: color-mix(in srgb, var(--nick-color, var(--primary-color)), #fff 60%) !important;
+}
+
+/* 自己发送的消息不显示昵称 */
+.chat-message.self .bubble-nickname {
+  display: none;
+}
+
+/* =========================================
+   Swipe Reply Indicator
+   ========================================= */
+.chat-message .swipe-reply-indicator {
+  position: absolute;
+  left: 100%;
+  top: 50%;
+  transform: translateY(-50%) scale(0.5);
+  margin-left: 10px;
+  opacity: 0;
+  width: 32px;
+  height: 32px;
+  background-image: url('data:image/svg+xml;charset=UTF-8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="%23888" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>');
+  background-size: 24px;
+  background-repeat: no-repeat;
+  background-position: center;
+  transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.2s ease;
+  pointer-events: none;
+}
+
+html[data-theme="dark"] .chat-message .swipe-reply-indicator {
+  background-image: url('data:image/svg+xml;charset=UTF-8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="%23bbb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>');
+}
+
+/* 连续发言隐藏昵称 */
+.chat-message.is-grouped-with-prev .bubble-nickname {
+  display: none;
+}
+
+/* 贴纸模式隐藏昵称 */
+.bubble.sticker-mode .bubble-nickname {
+  display: none !important;
+}
+
+/* =========================================
+   气泡内时间戳 (Bubble Timestamp)
+   ========================================= */
+.bubble-timestamp {
+  float: right;
+  margin-left: 8px;
+  margin-top: 9px;
+  font-size: 10px;
+  opacity: 0.5;
+  user-select: none;
+  cursor: default;
+  color: var(--dollars-text-secondary);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+/* text-content 恢复为块级元素 */
+.text-content {
+  display: block;
+}
+
+html[data-theme="dark"] .bubble-timestamp {
+  color: color-mix(in srgb, var(--primary-color), #fff 60%);
+}
+
+/* 连续消息隐藏气泡内时间戳 */
+.chat-message.is-grouped-with-next .bubble-timestamp {
+  display: none;
+}
+
+/* 贴纸模式下的时间戳样式 */
+.bubble.sticker-mode .bubble-timestamp {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  color: rgba(255, 255, 255, 0.9);
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-size: 10px;
+  line-height: 1.2;
+  top: auto;
+  margin: 0;
+  float: none;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  z-index: 10;
+}
+
+.chat-message:hover .bubble.sticker-mode .bubble-timestamp {
+  opacity: 1;
+}
+
+/* =========================================
+   外部时间戳 (用于贴纸模式)
+   ========================================= */
+.timestamp {
+  font-size: 10px;
+  color: var(--dollars-text-secondary);
+  margin-top: 2px;
+}
+
+.timestamp.outside-right {
+  display: block;
+  text-align: right;
+  width: 100%;
+  padding-right: 2px;
+  align-self: flex-end;
+}
+
+/* 默认隐藏外部时间戳 */
+.chat-message:not(.temp-message) .timestamp:not(.outside-right) {
+  display: none;
+}
+
+/* =========================================
+   Bubble Tail (气泡尾巴)
+   ========================================= */
+.bubble-tail {
+  position: absolute;
+  top: 0;
+  width: 11px;
+  height: 20px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.chat-message:not(.self) .bubble-tail {
+  left: -9px;
+  top: -1px;
+  color: #fff;
+  transform: scaleY(-1);
+}
+
+html[data-theme="dark"] .chat-message:not(.self) .bubble-tail {
+  color: #212121;
+}
+
+.chat-message.self .bubble-tail {
+  right: -9px;
+  top: -1px;
+  transform: scale(-1, -1);
+  color: color-mix(in srgb, var(--primary-color), #ffffff 80%);
+}
+
+html[data-theme="dark"] .chat-message.self .bubble-tail {
+  color: color-mix(in srgb, var(--primary-color), #180518 60%) !important;
+}
+
+.chat-message.is-grouped-with-prev .bubble-tail {
+  display: none;
+}
+
+.bubble.sticker-mode .bubble-tail {
+  display: none;
+}
+
+/* =========================================
+   Bubble Content
+   ========================================= */
+.bubble .text-content {
+  display: inline;
+}
+
+.bubble .text-content.deleted {
+  font-style: italic !important;
+  color: var(--dollars-text-secondary) !important;
+}
+
+.bubble a {
+  color: #0084b4 !important;
+}
+
+.bubble a:hover {
+  text-decoration: underline;
+}
+
+.bubble img.smiley {
+  display: inline-block;
+  width: 21px;
+  height: 21px;
+  margin: 0 1px;
+  vertical-align: text-bottom;
+  image-rendering: pixelated;
+}
+
+.bubble img.custom-emoji {
+  max-width: 150px;
+  max-height: 150px;
+  border-radius: 8px;
+}
+
+.bubble.sticker-mode .custom-emoji {
+  max-width: 150px;
+  max-height: 150px;
+  border-radius: 8px;
+  margin: 2px 0;
+  display: block;
+}
+
+.bubble .image-container {
+  position: relative;
+  display: grid;
+  overflow: hidden;
+  border-radius: 8px;
+  cursor: pointer;
+  max-height: 350px;
+}
+
+.bubble .image-container .full-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  opacity: 0;
+  grid-area: 1/1;
+  transition: opacity 0.3s ease-out;
+  z-index: 2;
+}
+
+.bubble .image-container .full-image.is-loaded {
+  opacity: 1;
+}
+
+.bubble .image-container .full-image.load-failed {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background-color: var(--dollars-bg-hover);
+  border-radius: 8px;
+}
+
+.bubble .blurhash-canvas {
+  width: 100%;
+  height: 100%;
+  grid-area: 1/1;
+  z-index: 1;
+  transition: opacity 0.3s ease-out;
+}
+
+.bubble .image-container.is-loaded .blurhash-canvas {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* =========================================
+   Quote Block
+   ========================================= */
+.chat-quote {
+  padding: 6px 8px;
+  border-left: 3px solid var(--primary-color);
+  background: linear-gradient(#ffffffe6, #ffffffe6), var(--primary-color);
+  border-radius: 4px;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  max-width: 100%;
+  width: 100%;
+  /* Force full width to wrap timestamp */
+  box-sizing: border-box;
+}
+
+html[data-theme="dark"] .chat-quote {
+  background: linear-gradient(rgba(0, 0, 0, 0.75), rgba(0, 0, 0, 0.75)), var(--primary-color);
+}
+
+.chat-quote:hover {
+  opacity: 0.9;
+}
+
+.chat-quote[data-jump-to-id] {
+  cursor: pointer;
+}
+
+.quote-avatar {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  margin-right: 4px;
+}
+
+.quote-thumbnail {
+  width: 36px;
+  height: 36px;
+  border-radius: 4px;
+  object-fit: cover;
+  margin-bottom: 2px;
+  display: block;
+}
+
+.quote-nickname {
+  font-weight: 700;
+  color: var(--primary-color);
+  font-size: 12px;
+}
+
+.quote-text-wrapper {
+  min-width: 0;
+  flex: 1;
+}
+
+.quote-content {
+  font-size: 12px;
+  color: var(--dollars-text);
+  opacity: 0.8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  overflow-wrap: break-word;
+}
+
+/* =========================================
+   Chat Input Area - 液态玻璃效果
+   ========================================= */
+.chat-input-container {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  right: 12px;
+  width: auto;
+  z-index: 100;
+  transition: transform 0.2s ease;
+}
+
+.chat-input-container:hover {
+  transform: translateY(-2px);
+}
+
+.chat-input-area {
+  position: relative;
+  /* Glass Surface Effect - consistent with dollars-smiles-floating */
+  background: var(--dollars-glass-bg);
+  backdrop-filter: var(--dollars-glass-blur);
+  -webkit-backdrop-filter: var(--dollars-glass-blur);
+  /* Use shadow-only approach to avoid black border flash on initial load */
+  border: none;
+  box-shadow:
+    var(--dollars-glass-shadow),
+    inset 0 0 0 1px var(--dollars-glass-border-color, rgba(255, 255, 255, 0.35));
+  border-radius: 24px;
+  padding: 6px 8px;
+  transition: box-shadow 0.2s ease;
+}
+
+.reply-preview {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px 4px 8px;
+  margin: 0 4px 4px 4px;
+  border-bottom: 1px solid var(--dollars-glass-border);
+  height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: height 0.2s ease-out, opacity 0.2s ease-out;
+}
+
+.reply-preview.visible {
+  height: 42px;
+  opacity: 1;
+}
+
+.reply-preview .reply-bar {
+  width: 3px;
+  height: 70%;
+  background-color: var(--primary-color);
+  border-radius: 2px;
+}
+
+.reply-preview .reply-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+}
+
+.reply-preview .reply-info {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.reply-preview .reply-user {
+  font-weight: 700;
+  color: var(--primary-color);
+}
+
+.reply-preview .reaction-item .num {
+  color: var(--dollars-text-secondary);
+}
+
+@keyframes pop {
+  0% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.4);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+.reaction-item.live_selected .emoji {
+  animation: pop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.reply-preview .reply-text {
+  color: var(--dollars-text-secondary);
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.reply-preview .reply-cancel-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--dollars-text-secondary);
+  font-size: 20px;
+  padding: 0;
+}
+
+.input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  position: relative;
+}
+
+.dollars-input-wrapper {
+  flex-grow: 1;
+  display: flex;
+  align-items: center;
+  border-radius: 18px;
+  min-width: 0;
+  background-color: rgba(255, 255, 255, 0.25);
+  border: none;
+  /* Very subtle inner shadow for depth */
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.03);
+  transition: all 0.2s ease;
+  backdrop-filter: blur(5px);
+  padding-left: 0;
+}
+
+html[data-theme="dark"] .dollars-input-wrapper {
+  background-color: rgba(0, 0, 0, 0.3);
+}
+
+.dollars-input-wrapper:focus-within {
+  background-color: rgba(255, 255, 255, 0.5);
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 2px rgba(240, 145, 153, 0.3), 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+html[data-theme="dark"] .dollars-input-wrapper:focus-within {
+  background-color: rgba(0, 0, 0, 0.5);
+}
+
+.chat-textarea {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  border-radius: 18px;
+  padding: 8px 14px;
+  resize: none;
+  font-size: 14px;
+  line-height: 1.4;
+  height: 38px;
+  max-height: 150px;
+  color: var(--dollars-text);
+  outline: none;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+html[data-theme="dark"] .chat-textarea {
+  background: none !important;
+}
+
+.chat-textarea:focus {
+  outline: none;
+}
+
+.input-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.action-btn,
+.dollars-icon-btn {
+  flex-shrink: 0;
+  width: 38px;
+  height: 38px;
+  border: none;
+  border-radius: 50%;
+  background-color: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--dollars-text-secondary);
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  background-repeat: no-repeat;
+  background-position: center;
+}
+
+.action-btn:hover,
+.dollars-icon-btn:hover {
+  background-color: var(--dollars-glass-highlight);
+  transform: scale(1.1);
+}
+
+.action-btn:active,
+.dollars-icon-btn:active {
+  transform: scale(0.95);
+}
+
+.action-btn svg {
+  width: 20px;
+  height: 20px;
+}
+
+.send-btn {
+  width: 38px;
+  height: 38px;
+  border: none;
+  background: var(--primary-color);
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  transition: transform 0.2s, filter 0.2s;
+  box-shadow: 0 0 10px color-mix(in srgb, var(--primary-color), transparent 20%);
+}
+
+.send-btn:hover {
+  filter: brightness(1.1);
+  transform: scale(1.05);
+}
+
+.send-btn:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+  filter: none;
+  box-shadow: none;
+}
+
+.send-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* =========================================
+   Smiley Panel - 液态玻璃效果
+   ========================================= */
+#dollars-smiles-floating {
+  --item-size: 32px;
+  --icon-size: 21px;
+  --item-hover-bg: rgba(255, 255, 255, 0.3);
+  --item-hover-scale: 1.1;
+  --transition-speed: 0.2s;
+  --panel-height: 320px;
+  --border-color: var(--dollars-border);
+
+  position: absolute;
+  bottom: calc(100% + 5px);
+  z-index: var(--dollars-z-index-smiley);
+  height: var(--panel-height);
+  width: 100%;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--dollars-glass-border-color);
+  border-radius: 18px;
+  /* Glass Surface Effect */
+  background: var(--dollars-glass-bg);
+  backdrop-filter: var(--dollars-glass-blur);
+  -webkit-backdrop-filter: var(--dollars-glass-blur);
+  box-shadow: var(--dollars-glass-shadow);
+  box-sizing: border-box;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(10px) scale(0.95);
+  transition: opacity 0.2s, transform 0.2s;
+  pointer-events: none;
+  transform-origin: bottom left;
+}
+
+html[data-theme="dark"] #dollars-smiles-floating {
+  --item-hover-bg: rgba(255, 255, 255, 0.1);
+}
+
+@keyframes dollars-panel-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(15px) scale(0.95);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+#dollars-smiles-floating.open {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+  animation: dollars-panel-slide-up 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+#dollars-smiles-tabs {
+  display: flex;
+  flex-shrink: 0;
+  padding: 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  background-color: transparent;
+}
+
+.smiley-tab-btn {
+  padding: 4px 12px;
+  border: 1px solid transparent;
+  border-radius: 15px;
+  background: none;
+  cursor: pointer;
+  color: var(--primary-color);
+  font-size: 13px;
+  transition: background-color var(--transition-speed), color var(--transition-speed);
+  image-rendering: pixelated;
+}
+
+.smiley-tab-btn:hover {
+  background-color: var(--item-hover-bg);
+}
+
+.smiley-tab-btn.active {
+  background-color: transparent;
+  color: var(--primary-color);
+  border-color: var(--dollars-border);
+  font-weight: 700;
+}
+
+#dollars-smiles-content {
+  padding: 8px;
+  overflow-y: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-start;
+  overscroll-behavior: contain;
+}
+
+.smiley-item {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: var(--item-size);
+  height: var(--item-size);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.smiley-item a {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  border-radius: 6px;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: var(--icon-size) var(--icon-size);
+  font-size: 0;
+  transition: background-color var(--transition-speed), transform calc(var(--transition-speed) / 2);
+  image-rendering: pixelated;
+}
+
+#dollars-smiles-floating .bmo,
+#dollars-reaction-picker-floating .bmo {
+  vertical-align: middle;
+}
+
+.smiley-item a:hover {
+  background-color: var(--item-hover-bg);
+  transform: scale(var(--item-hover-scale));
+}
+
+
+
+/* Favorites Items: Larger size */
+.smiley-item.favorite-item {
+  width: 64px;
+  height: 64px;
+  border-radius: 8px;
+}
+
+.smiley-item.favorite-item a {
+  background-size: contain;
+  background-color: rgba(0, 0, 0, 0.03);
+}
+
+html[data-theme="dark"] .smiley-item.favorite-item a {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.smiley-item.favorite-item .remove-favorite-btn {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 16px;
+  height: 16px;
+  background: rgba(0, 0, 0, 0.5);
+  color: white;
+  border-radius: 50%;
+  border: none;
+  font-size: 12px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.smiley-item.favorite-item:hover .remove-favorite-btn {
+  opacity: 1;
+}
+
+/* =========================================
+   Context Menu - Telegram-style layout
+   ========================================= */
+#dollars-context-menu {
+  position: fixed;
+  z-index: var(--dollars-z-index-context);
+  /* Remove container background/border/shadow */
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  min-width: unset;
+  /* Let children define width */
+
+  opacity: 0;
+  transform: scale(0.95);
+  pointer-events: none;
+  transition: transform 0.15s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.15s ease-out;
+}
+
+html[data-theme="dark"] #dollars-context-menu {
+  background: transparent;
+  box-shadow: none;
+}
+
+#dollars-context-menu.visible {
+  opacity: 1;
+  transform: scale(1);
+  pointer-events: auto;
+}
+
+/* has-items-wrapper: reactions + menu items structure */
+#dollars-context-menu.has-items-wrapper {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  /* Gap between reactions and items */
+  align-items: flex-start;
+  /* Prevent stretching, keeping items narrower */
+}
+
+/* Horizontal reactions row - Bubble Style */
+.context-menu-reactions {
+  display: flex;
+  align-items: center;
+  padding: 6px;
+  gap: 4px;
+
+  /* Glass Bubble Styles */
+  background: var(--dollars-glass-bg);
+  backdrop-filter: var(--dollars-glass-blur);
+  -webkit-backdrop-filter: var(--dollars-glass-blur);
+  box-shadow: var(--dollars-glass-shadow);
+  border: 1px solid var(--dollars-glass-border-color);
+  border-radius: 40px;
+  /* Pill shape */
+}
+
+
+.context-menu-reactions .reaction-item {
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  /* Circle */
+  cursor: pointer;
+  transition: transform 0.1s ease, background-color 0.15s ease;
+  -webkit-touch-callout: none;
+  user-select: none;
+}
+
+.context-menu-reactions .reaction-item:hover {
+  background-color: var(--dollars-bg-hover);
+  transform: scale(1.15);
+}
+
+.context-menu-reactions .reaction-item:active {
+  transform: scale(0.95);
+}
+
+.context-menu-reactions .reaction-item img {
+  width: 20px;
+  height: 20px;
+  display: block;
+  image-rendering: pixelated;
+}
+
+/* More button */
+.context-menu-reactions-more {
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: none;
+  border-radius: 50%;
+  cursor: pointer;
+  color: var(--dollars-text-secondary);
+  transition: background-color 0.15s ease, transform 0.1s ease;
+  flex-shrink: 0;
+}
+
+.context-menu-reactions-more:hover {
+  background-color: var(--dollars-bg-hover);
+  transform: scale(1.1);
+}
+
+.context-menu-reactions-more:active {
+  transform: scale(0.95);
+}
+
+.context-menu-reactions-more svg {
+  width: 20px;
+  height: 20px;
+  transition: transform 0.3s ease;
+}
+
+.context-menu-reactions-more.expanded svg {
+  transform: rotate(180deg);
+}
+
+/* Menu items container - Bubble Style */
+.context-menu-items {
+  padding: 5px 0;
+  min-width: 160px;
+  max-width: 220px;
+  /* Enforce smaller width */
+
+  /* Glass Bubble Styles */
+  background: var(--dollars-glass-bg);
+  backdrop-filter: var(--dollars-glass-blur);
+  -webkit-backdrop-filter: var(--dollars-glass-blur);
+  box-shadow: var(--dollars-glass-shadow);
+  border: 1px solid var(--dollars-glass-border-color);
+  border-radius: 18px;
+  overflow: hidden;
+}
+
+.context-menu-items button {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  color: var(--dollars-text);
+  font-size: 14px;
+  line-height: 20px;
+  transition: background-color 0.1s ease;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.context-menu-items button span:not(.context-icon) {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.context-icon {
+  width: 20px;
+  height: 20px;
+  margin-right: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--dollars-text-secondary);
+}
+
+html[data-theme="dark"] .context-icon {
+  color: #aaa;
+}
+
+.context-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.context-menu-items button.danger .context-icon {
+  color: #f5222d;
+}
+
+.context-menu-items button:hover {
+  background-color: var(--dollars-bg-hover);
+}
+
+.context-menu-items button.danger {
+  color: #f5222d;
+}
+
+.context-menu-items button.image-action {
+  display: none;
+}
+
+#dollars-context-menu.image-mode .context-menu-items button.image-action {
+  display: flex;
+}
+
+/* =========================================
+   Floating Reaction Picker
+   ========================================= */
+#dollars-reaction-picker-floating {
+  --item-size: 32px;
+  --icon-size: 21px;
+  --item-hover-bg: rgba(255, 255, 255, 0.3);
+  --panel-height: 260px;
+
+  position: fixed;
+  z-index: calc(var(--dollars-z-index-context) + 1);
+  /* width is set dynamically via inline style */
+  height: var(--panel-height);
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--dollars-glass-border-color);
+  border-radius: 18px;
+  background: var(--dollars-glass-bg);
+  backdrop-filter: var(--dollars-glass-blur);
+  -webkit-backdrop-filter: var(--dollars-glass-blur);
+  box-shadow: var(--dollars-glass-shadow);
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(-5px) scale(0.95);
+  transition: opacity 0.15s ease, transform 0.15s cubic-bezier(0.2, 0.8, 0.2, 1);
+  pointer-events: none;
+}
+
+html[data-theme="dark"] #dollars-reaction-picker-floating {
+  --item-hover-bg: rgba(255, 255, 255, 0.1);
+}
+
+@keyframes dollars-picker-slide-down {
+  0% {
+    opacity: 0;
+    transform: translateY(-15px) scale(0.95);
+  }
+
+  60% {
+    transform: translateY(3px) scale(1.01);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+#dollars-reaction-picker-floating.open {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+  animation: dollars-picker-slide-down 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.reaction-picker-tabs {
+  display: flex;
+  flex-shrink: 0;
+  padding: 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  background-color: transparent;
+  gap: 2px;
+}
+
+.reaction-picker-tab-btn {
+  padding: 4px 10px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: none;
+  cursor: pointer;
+  color: var(--dollars-text-secondary);
+  font-size: 13px;
+  transition: background-color 0.15s, color 0.15s;
+  image-rendering: pixelated;
+}
+
+html[data-theme="dark"] .reaction-picker-tab-btn {
+  color: #aaa;
+}
+
+.reaction-picker-tab-btn:hover {
+  background-color: var(--item-hover-bg);
+}
+
+html[data-theme="dark"] .reaction-picker-tab-btn:hover {
+  background-color: #444;
+}
+
+.reaction-picker-tab-btn.active {
+  background-color: var(--dollars-bg);
+  color: var(--dollars-text);
+  border-color: var(--dollars-border);
+  font-weight: 700;
+}
+
+html[data-theme="dark"] .reaction-picker-tab-btn.active {
+  background-color: #3a3a3a;
+  color: #eee;
+  border-color: #555;
+}
+
+.reaction-picker-content {
+  padding: 8px;
+  overflow-y: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-start;
+  overscroll-behavior: contain;
+}
+
+.reaction-picker-content .smiley-item {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: var(--item-size);
+  height: var(--item-size);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.reaction-picker-content .smiley-item a {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  border-radius: 6px;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: var(--icon-size) var(--icon-size);
+  font-size: 0;
+  transition: background-color 0.15s, transform 0.1s;
+  image-rendering: pixelated;
+}
+
+.reaction-picker-content .smiley-item a:hover {
+  background-color: var(--item-hover-bg);
+  transform: scale(1.1);
+}
+
+
+/* =========================================
+   User Mention
+   ========================================= */
+.user-mention {
+  color: var(--primary-color);
+  font-weight: 500;
+}
+
+.user-mention:hover {
+  text-decoration: underline;
+}
+
+/* =========================================
+   Chat Tags
+   ========================================= */
+.chat-tag {
+  color: var(--primary-color);
+  cursor: pointer;
+  margin-right: 2px;
+  display: inline-block;
+}
+
+.chat-tag:hover {
+  opacity: 0.8;
+}
+
+/* =========================================
+   Floating Date - 液态玻璃效果
+   ========================================= */
+#dollars-floating-date {
+  position: absolute;
+  top: 55px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  /* Glass Surface Effect */
+  background: var(--dollars-glass-bg);
+  backdrop-filter: var(--dollars-glass-blur);
+  -webkit-backdrop-filter: var(--dollars-glass-blur);
+  box-shadow: var(--dollars-glass-shadow);
+  border: 1px solid var(--dollars-glass-border-color);
+  color: var(--primary-color);
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 700;
+  text-shadow: none;
+  white-space: nowrap;
+}
+
+#dollars-floating-date.visible {
+  opacity: 1;
+}
+
+/* =========================================
+   Typing Indicator - 液态玻璃效果
+   ========================================= */
+#dollars-typing-indicator {
+  position: absolute;
+  top: -30px;
+  left: 10px;
+  height: auto;
+  /* Glass Surface Effect */
+  background: var(--dollars-glass-bg);
+  backdrop-filter: var(--dollars-glass-blur);
+  -webkit-backdrop-filter: var(--dollars-glass-blur);
+  box-shadow: var(--dollars-glass-shadow);
+  border: 1px solid var(--dollars-glass-border-color);
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  color: var(--dollars-text-secondary);
+  font-style: italic;
+  opacity: 0;
+  transition: opacity 0.2s, transform 0.2s;
+  line-height: 1.5;
+  pointer-events: none;
+  transform: translateY(5px);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+#dollars-typing-indicator.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+html[data-theme=dark] #dollars-typing-indicator {
+  color: #fff;
+}
+
+/* =========================================
+   Highlight Animation
+   ========================================= */
+@keyframes dollars-pulse-focus {
+  0% {
+    background-color: transparent;
+    box-shadow: 0 0 0 0 transparent;
+    transform: scale(1);
+  }
+
+  15% {
+    background-color: color-mix(in srgb, var(--primary-color), transparent 85%);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary-color), transparent 80%);
+    border-radius: 12px;
+    transform: scale(1.01);
+  }
+
+  100% {
+    background-color: transparent;
+    box-shadow: 0 0 0 0 transparent;
+    transform: scale(1);
+  }
+}
+
+.chat-message.mention-highlight {
+  animation: dollars-pulse-focus 4s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+  position: relative;
+}
+
+/* =========================================
+   Text Mask (Spoiler)
+   ========================================= */
+span.text_mask {
+  background-color: #555;
+}
+
+/* =========================================
+   Media Queries
+   ========================================= */
+@media (max-width: 768px) {
+  #dollars-chat-window {
+    width: auto;
+    max-width: calc(100vw - 20px);
+    height: calc(100dvh - 60px);
+    max-height: calc(100dvh - 60px);
+    left: 10px;
+    right: 10px;
+    bottom: 30px;
+    top: auto;
+  }
+
+  .chat-message {
+    content-visibility: visible;
+    contain-intrinsic-size: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  #dollars-chat-window,
+  #dollars-chat-window .chat-header .close-btn,
+  #dollars-chat-window .chat-message,
+  #dollars-chat-window .send-btn {
+    transition: none !important;
+  }
+}
+
+/* 极简版个人资料卡片 (Minimalist Profile Card) */
+#dollars-profile-card {
+  position: fixed;
+  z-index: var(--dollars-z-index-context);
+  width: 280px;
+  padding: 0;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.15);
+  color: var(--dollars-text);
+  opacity: 0;
+  transform: scale(0.95) translateY(5px);
+  transition: opacity 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+  pointer-events: none;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--dollars-border);
+}
+
+html[data-theme=dark] #dollars-profile-card {
+  background: rgba(45, 45, 45, 0.95);
+  box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.6);
+}
+
+@keyframes dollars-profile-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(15px) scale(0.95);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+#dollars-profile-card.visible {
+  opacity: 1;
+  transform: scale(1) translateY(0);
+  pointer-events: auto;
+  transition: none;
+  animation: dollars-profile-slide-up 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.dollars-profile-banner {
+  height: 60px;
+  width: 100%;
+  background: linear-gradient(160deg, color-mix(in srgb, var(--primary-color), #a0c4ff 50%) 0%, color-mix(in srgb, var(--primary-color), #ffffff 50%) 50%, color-mix(in srgb, var(--primary-color), #ffc6ff 50%) 100%);
+  position: relative;
+}
+
+.dollars-profile-banner::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: url('https://lsky.ry.mk/i/2026/01/03/background.svg');
+  background-size: 300px;
+  opacity: 1;
+  mix-blend-mode: overlay;
+}
+
+html[data-theme=dark] .dollars-profile-banner {
+  background: transparent;
+}
+
+html[data-theme=dark] .dollars-profile-banner::before {
+  mix-blend-mode: normal;
+  background: linear-gradient(160deg, var(--primary-color) 0%, color-mix(in srgb, var(--primary-color), transparent 40%) 100%);
+  -webkit-mask-image: url('https://lsky.ry.mk/i/2026/01/03/background.svg');
+  mask-image: url('https://lsky.ry.mk/i/2026/01/03/background.svg');
+  -webkit-mask-repeat: repeat;
+  mask-repeat: repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: 300px;
+  mask-size: 300px;
+  opacity: 0.25;
+}
+
+.dollars-profile-body {
+  padding: 0 20px 15px 20px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.dollars-profile-top-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-top: -30px;
+  margin-bottom: 12px;
+  position: relative;
+  z-index: 2;
+}
+
+.dollars-profile-identity {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-grow: 1;
+  min-width: 0;
+  margin-right: 8px;
+}
+
+.dollars-profile-avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  border: 3px solid var(--dollars-bg);
+  background-color: var(--dollars-bg);
+  object-fit: cover;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
+  flex-shrink: 0;
+}
+
+.dollars-profile-names {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.dollars-profile-nickname {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--dollars-text);
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dollars-profile-username {
+  font-size: 12px;
+  color: var(--dollars-text-secondary);
+  font-family: monospace;
+  opacity: 0.7;
+}
+
+.dollars-profile-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.dollars-profile-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: transparent;
+  border: 1px solid var(--dollars-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--dollars-text-secondary) !important;
+  transition: all 0.2s;
+  cursor: pointer;
+}
+
+.dollars-profile-btn:hover {
+  background: var(--primary-color);
+  color: white;
+  border-color: var(--primary-color);
+}
+
+.dollars-profile-btn svg {
+  width: 15px;
+  height: 15px;
+  stroke: currentColor;
+}
+
+.dollars-profile-sign {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--dollars-text);
+  opacity: 0.85;
+  margin-bottom: 12px;
+  background: none;
+  border: none;
+  padding: 0;
+  font-style: normal;
+  word-wrap: break-word;
+}
+
+.dollars-profile-footer {
+  font-size: 10px;
+  color: var(--dollars-text-placeholder);
+  padding-top: 8px;
+  border-top: 1px solid var(--dollars-border);
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.dollars-profile-footer::before {
+  content: "";
+  display: block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: var(--dollars-border);
+}
+
+.dollars-profile-footer.active::before {
+  background-color: #4CAF50;
+}
+
+/* =========================================
+   Resize Handle & Loader (Added)
+   ========================================= */
+
+#dollars-resize-handle {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 20px;
+  height: 20px;
+  cursor: nw-resize;
+  z-index: 10003;
+}
+
+#dollars-resize-handle::after {
+  content: "";
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  width: 8px;
+  height: 8px;
+  border-top: 2px solid var(--dollars-border);
+  border-left: 2px solid var(--dollars-border);
+  border-radius: 2px 0 0 0;
+  opacity: 0.5;
+}
+
+#dollars-resize-handle:hover::after {
+  border-color: var(--primary-color);
+  opacity: 1;
+}
+
+/* Loader */
+.dollars-loader {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 10px;
+  width: 100%;
+}
+
+.dollars-loader-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(0, 0, 0, 0.1);
+  border-left-color: var(--primary-color);
+  border-radius: 50%;
+  animation: dollars-spin 0.8s linear infinite;
+}
+
+html[data-theme="dark"] .dollars-loader-spinner {
+  border-color: rgba(255, 255, 255, 0.1);
+  border-left-color: var(--primary-color);
+}
+
+@keyframes dollars-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Fullscreen Overlay for Context Loading */
+.dollars-loader-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 15px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+html[data-theme="dark"] .dollars-loader-overlay {
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.dollars-loader-overlay.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.dollars-loader-overlay .dollars-loader-spinner {
+  width: 40px;
+  height: 40px;
+  border-width: 3px;
+}
+
+.dollars-loader-text {
+  font-size: 13px;
+  color: var(--dollars-text-secondary);
+  font-weight: 500;
+  animation: dollars-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes dollars-pulse {
+
+  0%,
+  100% {
+    opacity: 0.6;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+/* Online Status Dot in Header */
+.online-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  background-color: #4CAF50;
+  border-radius: 50%;
+  margin-right: 4px;
+}
+
+/* Chat Header Left Pane */
+.chat-header-left-pane {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: 8px;
+}
+
+/* =========================================
+   Restored Original Button Styles
+   ========================================= */
+
+/* Emoji Button */
+#dollars-emoji-btn {
+  width: 38px;
+  height: 38px;
+  border: none;
+  background-color: transparent;
+  cursor: pointer;
+  background-image: url('data:image/svg+xml;charset=UTF-8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%23555" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon icon-tabler icons-tabler-outline icon-tabler-device-tv"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M3 7m0 2a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v9a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2z" /><path d="M16 3l-4 4l-4 -4" /></svg>');
+  background-size: 23px;
+  background-repeat: no-repeat;
+  background-position: center;
+  color: #555;
+  border-radius: 50%;
+}
+
+html[data-theme="dark"] #dollars-emoji-btn {
+  background-image: url('data:image/svg+xml;charset=UTF-8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%23bbb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon icon-tabler icons-tabler-outline icon-tabler-device-tv"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M3 7m0 2a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v9a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2z" /><path d="M16 3l-4 4l-4 -4" /></svg>');
+  color: #bbb;
+}
+
+#dollars-emoji-btn svg {
+  display: none !important;
+}
+
+/* Attach Button */
+#dollars-attach-btn {
+  width: 38px;
+  height: 38px;
+  border: none;
+  background-color: transparent;
+  cursor: pointer;
+  background-image: url('data:image/svg+xml;charset=UTF-8,<svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="none"  stroke="%23555"  stroke-width="2"  stroke-linecap="round"  stroke-linejoin="round"  class="icon icon-tabler icons-tabler-outline icon-tabler-paperclip"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M15 7l-6.5 6.5a1.5 1.5 0 0 0 3 3l6.5 -6.5a3 3 0 0 0 -6 -6l-6.5 6.5a4.5 4.5 0 0 0 9 9l6.5 -6.5" /></svg>');
+  background-size: 23px;
+  background-repeat: no-repeat;
+  background-position: center;
+  border-radius: 50%;
+}
+
+html[data-theme="dark"] #dollars-attach-btn {
+  background-image: url('data:image/svg+xml;charset=UTF-8,<svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="none"  stroke="%23bbb"  stroke-width="2"  stroke-linecap="round"  stroke-linejoin="round"  class="icon icon-tabler icons-tabler-outline icon-tabler-paperclip"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M15 7l-6.5 6.5a1.5 1.5 0 0 0 3 3l6.5 -6.5a3 3 0 0 0 -6 -6l-6.5 6.5a4.5 4.5 0 0 0 9 9l6.5 -6.5" /></svg>');
+}
+
+#dollars-attach-btn svg {
+  display: none !important;
+}
+
+/* Send Button */
+.send-btn {
+  background-color: var(--primary-color);
+  background-image: url('data:image/svg+xml;charset=UTF-8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M4.698 4.034l16.302 7.966l-16.302 7.966a.503 .503 0 0 1 -.546 -.124a.555 .555 0 0 1 -.12 -.568l2.468 -7.274l-2.468 -7.274a.555 .555 0 0 1 .12 -.568a.503 .503 0 0 1 .546 -.124z" /><path d="M6.5 12h14.5" /></svg>');
+  background-size: 20px;
+  background-repeat: no-repeat;
+  background-position: center;
+  transition: background-color .2s, filter .2s;
+  box-shadow: 0 0 10px color-mix(in srgb, var(--primary-color), transparent 20%);
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+}
+
+.send-btn svg {
+  display: none !important;
+}
+
+/* Header Buttons Container */
+.chat-header .header-buttons,
+.header-buttons {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* Header Button */
+.header-btn {
+  cursor: pointer;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: background-color .2s ease;
+  border: none;
+  background: transparent;
+}
+
+html[data-theme="dark"] .chat-header .header-btn:hover {
+  background-color: rgba(255, 255, 255, .08);
+}
+
+/* Back Button */
+#dollars-back-btn {
+  margin-right: 0;
+  background-image: url('data:image/svg+xml;charset=UTF-8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="%23555" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>');
+  background-repeat: no-repeat;
+  background-position: center;
+}
+
+html[data-theme="dark"] #dollars-back-btn {
+  background-image: url('data:image/svg+xml;charset=UTF-8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="%23bbb" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>');
+}
+
+#dollars-back-btn svg {
+  display: none !important;
+}
+
+/* Resize Handle */
+#dollars-resize-handle {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 20px;
+  height: 20px;
+  cursor: nw-resize;
+  z-index: 10003;
+  background-image: url('data:image/svg+xml;charset=UTF-8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none"><path d="M10 2L2 10" stroke="%23a0a0a0" stroke-width="2" stroke-linecap="round"/><path d="M14 6L6 14" stroke="%23a0a0a0" stroke-width="2" stroke-linecap="round"/></svg>');
+  background-repeat: no-repeat;
+  background-position: 5px 5px;
+  background-size: 10px;
+  opacity: .6;
+  transition: opacity .2s ease;
+}
+
+#dollars-resize-handle:hover {
+  opacity: 1;
+}
+
+html[data-theme="dark"] #dollars-resize-handle {
+  background-image: url('data:image/svg+xml;charset=UTF-8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none"><path d="M10 2L2 10" stroke="%23bbb" stroke-width="2" stroke-linecap="round"/><path d="M14 6L6 14" stroke="%23bbb" stroke-width="2" stroke-linecap="round"/></svg>');
+}
+
+/* Disable the custom triangle pseudo-element */
+#dollars-resize-handle::after {
+  display: none !important;
+}
+
+/* Missing Header Button Specifics */
+#dollars-search-btn {
+  background-image: url('data:image/svg+xml;charset=UTF-8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%23555" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>');
+}
+
+html[data-theme="dark"] #dollars-search-btn {
+  background-image: url('data:image/svg+xml;charset=UTF-8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%23bbb" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>');
+}
+
+#dollars-settings-btn-header {
+  background-image: url('data:image/svg+xml;charset=UTF-8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><g fill="none" stroke="%23555" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 0 0 2.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 0 0 1.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 0 0-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 0 0-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 0 0-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 0 0-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 0 0 1.066-2.573c-.94-1.543.826-3.31 2.37-2.37c1 .608 2.296.07 2.572-1.065z"></path><circle cx="12" cy="12" r="3"></circle></g></svg>');
+  background-size: 20px !important;
+}
+
+html[data-theme="dark"] #dollars-settings-btn-header {
+  background-image: url('data:image/svg+xml;charset=UTF-8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><g fill="none" stroke="%23bbb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 0 0 2.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 0 0 1.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 0 0-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 0 0-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 0 0-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 0 0-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 0 0 1.066-2.573c-.94-1.543.826-3.31 2.37-2.37c1 .608 2.296.07 2.572-1.065z"></path><circle cx="12" cy="12" r="3"></circle></g></svg>');
+}
+
+#dollars-maximize-btn {
+  background-image: url('data:image/svg+xml;charset=UTF-8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%23555" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>');
+}
+
+html[data-theme="dark"] #dollars-maximize-btn {
+  background-image: url('data:image/svg+xml;charset=UTF-8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%23bbb" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>');
+}
+
+#dollars-chat-window.maximized #dollars-maximize-btn {
+  background-image: url('data:image/svg+xml;charset=UTF-8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%23555" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/></svg>');
+}
+
+html[data-theme="dark"] #dollars-chat-window.maximized #dollars-maximize-btn {
+  background-image: url('data:image/svg+xml;charset=UTF-8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%23bbb" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/></svg>');
+}
+
+.chat-header .close-btn {
+  background-image: url('data:image/svg+xml;charset=UTF-8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%23555" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>');
+}
+
+html[data-theme="dark"] .chat-header .close-btn {
+  background-image: url('data:image/svg+xml;charset=UTF-8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%23bbb" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>');
+}
+
+/* =========================================
+   Text Formatter (BBCode Toolbar)
+   ========================================= */
+#dollars-text-formatter {
+  position: fixed;
+  z-index: var(--dollars-z-index-context);
+  /* Glass Surface Effect */
+  background: var(--dollars-glass-bg);
+  backdrop-filter: var(--dollars-glass-blur);
+  -webkit-backdrop-filter: var(--dollars-glass-blur);
+  box-shadow: var(--dollars-glass-shadow);
+  border: 1px solid var(--dollars-glass-border-color);
+  border-radius: 50px;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  opacity: 0;
+  transform: translateY(10px) scale(0.95);
+  pointer-events: none;
+  transition: opacity 0.2s cubic-bezier(0.2, 0.8, 0.2, 1),
+    transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* Dark mode override removed as it uses CSS variables now */
+/*html[data-theme="dark"] #dollars-text-formatter {
+  background: rgba(45, 45, 45, 0.95);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+}*/
+
+#dollars-text-formatter.visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+}
+
+.formatter-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.formatter-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  border-radius: 50px;
+  cursor: pointer;
+  color: var(--dollars-text);
+  transition: background-color 0.2s;
+}
+
+.formatter-btn:hover {
+  background-color: var(--dollars-bg-hover);
+}
+
+.formatter-btn.active {
+  color: var(--primary-color);
+}
+
+.formatter-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.formatter-divider {
+  width: 1px;
+  height: 18px;
+  background-color: var(--dollars-border);
+  margin: 0 4px;
+}
+
+.formatter-link-input-wrapper {
+  display: none;
+  align-items: center;
+  gap: 4px;
+  padding: 0 2px;
+}
+
+#dollars-text-formatter.link-mode .main-buttons {
+  display: none;
+}
+
+#dollars-text-formatter.link-mode .formatter-link-input-wrapper {
+  display: flex;
+}
+
+.formatter-link-input {
+  background: transparent;
+  border: none;
+  color: var(--dollars-text);
+  font-size: 13px;
+  width: 150px;
+  outline: none;
+  padding: 4px;
+}
+
+.formatter-link-input::placeholder {
+  color: var(--dollars-text-placeholder);
+}
+
+/* =========================================
+   Navigation Group & Buttons
+   ========================================= */
+#dollars-nav-group {
+  position: absolute;
+  bottom: 90px;
+  right: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 30;
+  pointer-events: none;
+  transition: transform 0.2s, opacity 0.2s;
+}
+
+#dollars-nav-group.visible {
+  pointer-events: auto;
+}
+
+.nav-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid var(--dollars-glass-border-color);
+  /* Glass Surface Effect */
+  background: var(--dollars-glass-bg);
+  backdrop-filter: var(--dollars-glass-blur);
+  -webkit-backdrop-filter: var(--dollars-glass-blur);
+  box-shadow: var(--dollars-glass-shadow);
+  color: var(--primary-color);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transform: scale(0.8);
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  pointer-events: none;
+}
+
+.nav-btn.visible {
+  opacity: 1;
+  transform: scale(1);
+  pointer-events: auto;
+}
+
+.nav-btn:hover {
+  background: var(--dollars-glass-bg);
+  transform: scale(1.1);
+  box-shadow: var(--dollars-glass-shadow), 0 0 0 2px color-mix(in srgb, var(--primary-color), transparent 70%);
+}
+
+.nav-btn:active {
+  transform: scale(0.95);
+}
+
+.nav-btn svg {
+  width: 24px;
+  height: 24px;
+  stroke-width: 2.5;
+}
+
+/* Specific styling for the scroll bottom button if used standalone */
+#dollars-scroll-bottom-btn {
+  /* It uses .nav-btn class, so base styles apply */
+  /* If it needs specific positioning when NOT in a group, meaningful defaults: */
+  position: absolute;
+  bottom: 80px;
+  right: 20px;
+  z-index: 95;
+}
+
+/* Telegram-style: 跳转到未读消息模式 */
+#dollars-scroll-bottom-btn.mode-to-unread {
+  background-color: var(--primary-color);
+  color: #fff;
+}
+
+/* Scroll to Mention Button (like Telegram) */
+#dollars-scroll-mention-btn {
+  position: absolute;
+  right: 20px;
+  z-index: 95;
+  /* Position above scroll-bottom-btn with dynamic bottom */
+}
+
+#dollars-scroll-mention-btn svg {
+  transform: rotate(180deg);
+}
+
+/* Unread Badge */
+#dollars-unread-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 9px;
+  background-color: var(--primary-color);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  padding: 0 5px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+  display: none;
+  z-index: 31;
+}
+
+/* =========================================
+   MentionCompleter (@ User Search)
+   ========================================= */
+#dollars-mention-list {
+  position: absolute;
+  bottom: calc(100% + 5px);
+  left: 0;
+  width: 100%;
+  max-height: 220px;
+  overflow-y: auto;
+  border-radius: 18px;
+  display: none;
+  flex-direction: column;
+  z-index: var(--dollars-z-index-smiley);
+  /* Glass Surface Effect */
+  background: var(--dollars-glass-bg);
+  backdrop-filter: var(--dollars-glass-blur);
+  -webkit-backdrop-filter: var(--dollars-glass-blur);
+  box-shadow: var(--dollars-glass-shadow);
+  border: 1px solid var(--dollars-glass-border-color);
+  gap: 4px;
+  transition: bottom 0.2s ease;
+}
+
+#dollars-mention-list.visible {
+  display: flex;
+  animation: dollars-slide-up 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes dollars-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes dollars-item-slide-in {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.mention-item {
+  display: flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: 15px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  gap: 8px;
+  animation: dollars-item-slide-in 0.25s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+
+.mention-item:nth-child(1) {
+  animation-delay: 0ms;
+}
+
+.mention-item:nth-child(2) {
+  animation-delay: 30ms;
+}
+
+.mention-item:nth-child(3) {
+  animation-delay: 60ms;
+}
+
+.mention-item:nth-child(4) {
+  animation-delay: 90ms;
+}
+
+.mention-item:nth-child(5) {
+  animation-delay: 120ms;
+}
+
+.mention-item:nth-child(6) {
+  animation-delay: 150ms;
+}
+
+.mention-item:hover,
+.mention-item.active {
+  background-color: rgba(255, 255, 255, 0.3);
+}
+
+html[data-theme="dark"] .mention-item:hover,
+html[data-theme="dark"] .mention-item.active {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.mention-item img {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
+  background-color: var(--dollars-bg);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.mention-item-info {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  overflow: hidden;
+  min-width: 0;
+  line-height: 1.2;
+}
+
+.mention-item-nick {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--dollars-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mention-item-user {
+  font-size: 10px;
+  color: var(--dollars-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0.8;
+}
+
+/* =========================================
+   Link Previews
+   ========================================= */
+.dollars-link-previews {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.dollars-preview-card {
+  background-color: var(--dollars-bg);
+  border: 1px solid var(--dollars-border);
+  border-radius: 8px;
+  padding: 10px;
+  display: flex;
+  gap: 12px;
+  text-decoration: none !important;
+  transition: all 0.2s;
+  box-sizing: border-box;
+  max-width: 100% !important;
+  height: 100px;
+  width: 300px;
+  overflow: hidden;
+  position: relative;
+  min-width: 0;
+}
+
+.dollars-preview-card .cover {
+  width: 80px;
+  height: 80px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  background-color: var(--dollars-bg);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dollars-preview-card .cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 0 !important;
+}
+
+.dollars-preview-card[data-entity-type=character] .cover img,
+.dollars-preview-card[data-entity-type=person] .cover img {
+  object-fit: contain !important;
+}
+
+.dollars-preview-card[data-entity-type=generic] .cover {
+  background-color: var(--dollars-bg);
+  border-radius: 5px;
+}
+
+.dollars-preview-card[data-entity-type=generic] .cover img {
+  object-fit: cover;
+}
+
+.dollars-preview-card .inner {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.dollars-preview-card .title {
+  font-size: 14px;
+  font-weight: bold;
+  color: var(--dollars-text) !important;
+  margin: 0 0 4px 0;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.dollars-preview-card .subtitle {
+  font-size: 12px;
+  color: var(--dollars-text-secondary);
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
+}
+
+.dollars-preview-card .info {
+  font-size: 12px;
+  color: var(--dollars-text-secondary);
+  margin: 0;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.dollars-preview-card[data-entity-type=generic] .info {
+  margin-top: 4px;
+  margin-bottom: 0;
+}
+
+.dollars-preview-card .rateInfo {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--dollars-text-placeholder);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.dollars-preview-card .rank {
+  font-weight: 700;
+  color: var(--primary-color);
+}
+
+.dollars-preview-card .score,
+.dollars-preview-card .stat {
+  font-weight: 700;
+  color: var(--dollars-text);
+}
+
+.dollars-preview-card .total {
+  color: var(--dollars-text-placeholder);
+}
+
+.dollars-preview-card .rateInfo img.favicon {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+}
+
+.dollars-preview-placeholder {
+  height: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--dollars-text-secondary);
+  background-color: var(--dollars-bg);
+  border: 1px dashed var(--dollars-border);
+  border-radius: 15px;
+  padding: 8px;
+  box-sizing: border-box;
+  transition: background-color .3s;
+  min-width: 0;
+  width: 300px;
+  max-width: 100% !important;
+}
+
+.dollars-preview-placeholder.is-loading {
+  cursor: wait;
+  background: linear-gradient(-45deg, var(--dollars-bg) 25%, var(--dollars-bg-hover) 50%, var(--dollars-bg) 75%);
+  background-size: 400% 400%;
+  animation: 1.5s infinite gradient-scroll;
+}
+
+@keyframes gradient-scroll {
+  0% {
+    background-position: 0% 50%;
+  }
+
+  50% {
+    background-position: 100% 50%;
+  }
+
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+/* =========================================
+   Search UI
+   ========================================= */
+#dollars-search-ui {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+  min-height: 0;
+  gap: 8px;
+  padding: 52px 12px 12px 12px;
+  /* Glass Surface Effect */
+  background: var(--dollars-glass-bg);
+  backdrop-filter: var(--dollars-glass-blur);
+  -webkit-backdrop-filter: var(--dollars-glass-blur);
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 100;
+}
+
+
+#dollars-search-ui .search-bar {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  position: relative;
+  border-radius: 100px;
+  border: 1px solid var(--dollars-border);
+  background-color: var(--dollars-bg);
+  transition: all .3s ease-in-out;
+  padding: 0 4px 0 12px;
+}
+
+#dollars-search-ui .search-bar:focus-within {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 10px rgba(240, 145, 153, .6);
+}
+
+#dollars-search-ui input {
+  flex-grow: 1;
+  padding: 6px 0;
+  border: none;
+  border-radius: 0;
+  background-color: transparent;
+  outline: 0;
+  color: var(--dollars-text);
+}
+
+#dollars-search-ui .search-close-btn {
+  cursor: pointer;
+  font-size: 20px;
+  color: var(--dollars-text-secondary);
+  padding: 0 8px;
+  z-index: 1;
+}
+
+#dollars-search-ui input[type=search]::-webkit-search-cancel-button,
+#dollars-search-ui input[type=search]::-webkit-search-decoration {
+  -webkit-appearance: none;
+  appearance: none;
+  display: none;
+}
+
+#dollars-search-results {
+  flex-grow: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.search-result-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color .2s;
+}
+
+.search-result-item:hover {
+  background-color: var(--dollars-bg-hover);
+}
+
+.search-result-item img {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+}
+
+.search-result-item .dollars-search-content {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.search-result-item .dollars-search-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.search-result-item .dollars-search-nickname {
+  font-weight: 700;
+  color: var(--dollars-text);
+}
+
+.search-result-item .dollars-search-timestamp {
+  color: var(--dollars-text-secondary);
+}
+
+.search-result-item .dollars-search-message {
+  font-size: 13px;
+  color: var(--dollars-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Tooltip Styles from Legacy Script */
+.dollars-tooltip {
+  pointer-events: auto !important;
+}
+
+.dollars-tooltip .tooltip-inner a {
+  color: #eee !important;
+  text-decoration: none !important;
+  transition: color .2s;
+  cursor: pointer;
+}
+
+.dollars-tooltip .tooltip-inner a:hover {
+  color: #fff !important;
+  border-bottom-color: #fff;
+  text-decoration: none !important;
+}
+
+/* =========================================
+   Elegant Animation Keyframes
+   ========================================= */
+
+/* New Message Entrance - Simple Slide Up */
+@keyframes dollars-message-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Exit Animations - Scale Down + Fade */
+@keyframes dollars-scale-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+}
+
+/* Exit Animations - Slide Down + Fade */
+@keyframes dollars-slide-down-out {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+/* Context Menu Exit */
+#dollars-context-menu.closing {
+  animation: dollars-scale-out 0.15s ease-out forwards;
+  pointer-events: none;
+}
+
+/* Profile Card Exit */
+@keyframes dollars-profile-slide-out {
+  0% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateY(10px) scale(0.95);
+  }
+}
+
+#dollars-profile-card.closing {
+  animation: dollars-profile-slide-out 0.2s cubic-bezier(0.4, 0, 1, 1) forwards;
+  pointer-events: none;
+  transition: none;
+}
+
+/* Smiley Panel Exit */
+#dollars-smiles-floating.closing {
+  animation: dollars-slide-down-out 0.2s ease-out forwards;
+  pointer-events: none;
+}
+
+/* Reaction Picker Exit */
+#dollars-reaction-picker-floating.closing {
+  animation: dollars-scale-out 0.15s ease-out forwards;
+  pointer-events: none;
+}
+
+.chat-message.new-message {
+  animation: dollars-message-in 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  /* Disable transition during animation to prevent conflict */
+  transition: none !important;
+}
+
+/* Pending (Optimistic) Message */
+.chat-message.pending {
+  opacity: 0.7;
+}
+
+.chat-message.pending .bubble::after {
+  content: '';
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--dollars-text-secondary);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: dollars-spin 0.8s linear infinite;
+}
+
+/* Reaction Emoji Pop Animation */
+@keyframes dollars-reaction-pop {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+
+  50% {
+    transform: scale(1.3);
+  }
+
+  70% {
+    transform: scale(0.9);
+  }
+
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.reaction-item.just-added {
+  animation: dollars-reaction-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* =========================================
+   Reaction Avatar Styles
+   ========================================= */
+.reaction-avatars {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 3px;
+  flex-shrink: 0;
+}
+
+.reaction-avatar {
+  width: 21px;
+  height: 21px;
+  border-radius: 50%;
+  margin-left: -5px;
+  object-fit: cover;
+  background-color: var(--dollars-bg);
+  position: relative;
+  flex-shrink: 0;
+  transition: transform 0.15s ease;
+}
+
+.reaction-avatar:first-child {
+  margin-left: 0;
+}
+
+.reaction-item:hover .reaction-avatar {
+  border-color: #369cf8;
+}
+
+.reaction-item .num.extra {
+  font-size: 10px;
+  margin-left: 2px;
+  color: var(--dollars-text-secondary);
+}
+
+.reaction-item:hover .num.extra {
+  color: #fff;
+}
+
+/* Stagger Fade In for Grid Items */
+@keyframes dollars-stagger-fade {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Smiley Panel Items Stagger Animation */
+#dollars-smiles-floating.open .smiley-item,
+#dollars-reaction-picker-floating.open .smiley-item {
+  animation: dollars-stagger-fade 0.25s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+
+/* Context Menu Cascade Animation */
+@keyframes dollars-menu-cascade {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+#dollars-context-menu.visible .context-menu-items button {
+  animation: dollars-menu-cascade 0.2s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+
+#dollars-context-menu.visible .context-menu-items button:nth-child(1) {
+  animation-delay: 0ms;
+}
+
+#dollars-context-menu.visible .context-menu-items button:nth-child(2) {
+  animation-delay: 25ms;
+}
+
+#dollars-context-menu.visible .context-menu-items button:nth-child(3) {
+  animation-delay: 50ms;
+}
+
+#dollars-context-menu.visible .context-menu-items button:nth-child(4) {
+  animation-delay: 75ms;
+}
+
+#dollars-context-menu.visible .context-menu-items button:nth-child(5) {
+  animation-delay: 100ms;
+}
+
+#dollars-context-menu.visible .context-menu-items button:nth-child(6) {
+  animation-delay: 125ms;
+}
+
+#dollars-context-menu.visible .context-menu-items button:nth-child(7) {
+  animation-delay: 150ms;
+}
+
+#dollars-context-menu.visible .context-menu-items button:nth-child(8) {
+  animation-delay: 175ms;
+}
+
+/* Context Menu Reactions Bounce Animation */
+@keyframes dollars-reaction-bounce {
+  0% {
+    opacity: 0;
+    transform: scale(0.3) translateY(15px);
+  }
+
+  40% {
+    transform: scale(1.2) translateY(-10px);
+  }
+
+  65% {
+    transform: scale(0.92) translateY(2px);
+  }
+
+  85% {
+    transform: scale(1.05) translateY(-2px);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+#dollars-context-menu.visible .context-menu-reactions .reaction-item {
+  animation: dollars-reaction-bounce 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
+}
+
+#dollars-context-menu.visible .context-menu-reactions .reaction-item:nth-child(1) {
+  animation-delay: 0ms;
+}
+
+#dollars-context-menu.visible .context-menu-reactions .reaction-item:nth-child(2) {
+  animation-delay: 35ms;
+}
+
+#dollars-context-menu.visible .context-menu-reactions .reaction-item:nth-child(3) {
+  animation-delay: 70ms;
+}
+
+#dollars-context-menu.visible .context-menu-reactions .reaction-item:nth-child(4) {
+  animation-delay: 105ms;
+}
+
+#dollars-context-menu.visible .context-menu-reactions .reaction-item:nth-child(5) {
+  animation-delay: 140ms;
+}
+
+#dollars-context-menu.visible .context-menu-reactions .reaction-item:nth-child(6) {
+  animation-delay: 175ms;
+}
+
+#dollars-context-menu.visible .context-menu-reactions .reaction-item:nth-child(7) {
+  animation-delay: 210ms;
+}
+
+/* Reply Preview Slide Animation */
+.reply-preview.visible {
+  animation: dollars-slide-up 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* Search Result Items Stagger */
+.search-result-item {
+  animation: dollars-item-slide-in 0.25s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+
+.search-result-item:nth-child(1) {
+  animation-delay: 0ms;
+}
+
+.search-result-item:nth-child(2) {
+  animation-delay: 30ms;
+}
+
+.search-result-item:nth-child(3) {
+  animation-delay: 60ms;
+}
+
+.search-result-item:nth-child(4) {
+  animation-delay: 90ms;
+}
+
+.search-result-item:nth-child(5) {
+  animation-delay: 120ms;
+}
+
+.search-result-item:nth-child(6) {
+  animation-delay: 150ms;
+}
+
+.search-result-item:nth-child(7) {
+  animation-delay: 180ms;
+}
+
+.search-result-item:nth-child(8) {
+  animation-delay: 210ms;
+}
+
+/* Conversation Item Hover Enhancement */
+.conversation-item {
+  transition: background-color 0.2s, box-shadow 0.2s, transform 0.15s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.conversation-item:hover {
+  transform: scale(1.02);
+}
+
+.conversation-item:active {
+  transform: scale(0.98);
+}
+
+/* Button Microinteractions */
+.send-btn {
+  transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.2s, box-shadow 0.2s;
+}
+
+.send-btn:active {
+  transform: scale(0.9) !important;
+}
+
+/* Icon Button Hover Wobble */
+@keyframes dollars-icon-wobble {
+
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+
+  25% {
+    transform: rotate(-5deg);
+  }
+
+  75% {
+    transform: rotate(5deg);
+  }
+}
+
+#dollars-emoji-btn:hover,
+#dollars-attach-btn:hover {
+  animation: dollars-icon-wobble 0.4s ease-in-out;
+}
+
+/* Header Button Pulse on Hover */
+.header-btn {
+  transition: background-color 0.2s, transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.header-btn:hover {
+  transform: scale(1.1);
+}
+
+.header-btn:active {
+  transform: scale(0.92);
+}
+
+/* Floating Date Slide In */
+@keyframes dollars-date-slide {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+#dollars-floating-date.visible {
+  animation: dollars-date-slide 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* Typing Indicator Dots Animation */
+@keyframes dollars-typing-dot {
+
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.5;
+  }
+
+  30% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+
+/* Scroll Bottom Button Bounce In */
+@keyframes dollars-btn-bounce-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+
+  60% {
+    transform: scale(1.1);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.nav-btn.visible {
+  animation: dollars-btn-bounce-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Input Focus Glow Animation - Removed per user request */
+/*@keyframes dollars-focus-glow {
+
+  0%,
+  100% {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-color), transparent 70%);
+  }
+
+  50% {
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary-color), transparent 80%);
+  }
+}
+
+.chat-input-area:focus-within {
+  animation: dollars-focus-glow 2s ease-in-out infinite;
+}*/
+
+/* Link Preview Card Entrance */
+.dollars-preview-card {
+  animation: dollars-item-slide-in 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* Avatar Hover Effect - Removed per user request */
+/*.chat-message .avatar {
+  transition: box-shadow 0.3s, transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.chat-message .avatar:hover {
+  transform: scale(1.08);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}*/
+
+/* Bubble Hover Lift Effect - Removed per user request */
+/*.chat-message .bubble {
+  transition: background 0.3s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.chat-message:hover .bubble {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(16, 35, 47, 0.12);
+}*/
+
+/* Quote Hover Animation */
+.chat-quote {
+  transition: opacity 0.2s, transform 0.15s ease, background 0.2s;
+}
+
+.chat-quote:hover {
+  transform: scale(1.01);
+}
+
+/* Smiley Tab Button Transitions */
+.smiley-tab-btn,
+.reaction-picker-tab-btn {
+  transition: background-color 0.15s, color 0.15s, transform 0.1s;
+}
+
+.smiley-tab-btn:active,
+.reaction-picker-tab-btn:active {
+  transform: scale(0.95);
+}
+
+/* Text Formatter Entrance */
+@keyframes dollars-formatter-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.9);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+#dollars-text-formatter.visible {
+  animation: dollars-formatter-in 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* Formatter Button Interactions */
+.formatter-btn {
+  transition: background-color 0.15s, transform 0.1s, color 0.15s;
+}
+
+.formatter-btn:active {
+  transform: scale(0.9);
+}
+
+/* Online Status Dot Pulse - REMOVED */
+.online-dot {
+  /* Animation removed as requested */
+}
+
+/* Respect Reduced Motion Preferences */
+@media (prefers-reduced-motion: reduce) {
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* =========================================
+   Unified Notifier
+   ========================================= */
+#unified-notifier {
+  position: fixed;
+  bottom: 40px;
+  right: 30px;
+  width: 223px;
+  z-index: 10001;
+  border-radius: 15px;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  overflow: hidden;
+  transform: translateX(calc(100% + 30px));
+  transition: all .4s ease-in-out;
+  background-color: rgba(254, 254, 254, .9);
+  color: #000;
+  border: 1px solid rgba(0, 0, 0, .1);
+  box-shadow: 0 5px 25px -5px rgba(80, 80, 80, .3);
+  display: flex;
+  flex-direction: column;
+}
+
+html[data-theme=dark] #unified-notifier {
+  background-color: rgba(45, 46, 47, .9);
+  color: #e0e0e1;
+  border: 1px solid rgba(255, 255, 255, .15);
+}
+
+#unified-notifier.show {
+  transform: translateX(0);
+}
+
+.un-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 15px;
+  height: 32px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--primary-color);
+  border-bottom: 1px solid #eee;
+}
+
+html[data-theme=dark] .un-header {
+  border-bottom: 1px solid #444;
+}
+
+.un-body {
+  padding: 0;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.un-item {
+  display: flex;
+  align-items: flex-start;
+  padding: 10px 15px;
+}
+
+.un-item:not(:last-child) {
+  border-bottom: 1px solid #eee;
+}
+
+html[data-theme=dark] .un-item:not(:last-child) {
+  border-bottom: 1px solid #444;
+}
+
+.un-item .avatarNeue {
+  margin-right: 12px;
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  background-size: cover;
+  border-radius: 50%;
+}
+
+.un-item .content {
+  flex-grow: 1;
+  font-size: 13px;
+  overflow: hidden;
+}
+
+.un-item .actions {
+  margin-top: 8px;
+}
+
+.un-action-btn {
+  cursor: pointer;
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  text-decoration: none !important;
+  transition: background-color 0.2s;
+}
+
+.un-action-btn.btnRedSmall {
+  background-color: var(--primary-color);
+  color: #fff !important;
+}
+
+.un-action-btn.btnRedSmall:hover {
+  background-color: #369cf8;
+}
+
+.un-action-btn.btnGraySmall {
+  background-color: #eee;
+  color: #666 !important;
+}
+
+.un-action-btn.btnGraySmall:hover {
+  background-color: #ddd;
+}
+
+html[data-theme=dark] .un-action-btn.btnGraySmall {
+  background-color: #444;
+  color: #ccc !important;
+}
+
+html[data-theme=dark] .un-action-btn.btnGraySmall:hover {
+  background-color: #555;
+}
+
+.un-widget-title {
+  color: #3e3e3e;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.un-widget-message {
+  color: #666;
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 4px;
+}
+
+html[data-theme=dark] .un-widget-title {
+  color: #e9e9e9;
+}
+
+html[data-theme=dark] .un-widget-message {
+  color: #aaa;
+}
+
+/* Clear all button */
+.un-clear-all {
+  font-size: 12px;
+  color: #999 !important;
+  text-decoration: none !important;
+}
+
+.un-clear-all:hover {
+  color: var(--primary-color) !important;
+}
+
+/* Unread Badge on Scroll Bottom Button */
+#dollars-unread-badge {
+  display: none;
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 9px;
+  background-color: var(--primary-color);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  padding: 0 5px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+  z-index: 10;
+}
+
+/* History Separator - Telegram-style "上次浏览位置" bar */
+.history-separator {
+  display: block;
+  position: relative;
+  text-align: center;
+  margin: 12px -19px;
+  width: calc(100% + 38px);
+  height: 30px;
+  line-height: 30px;
+  background-color: #fff;
+  z-index: 2;
+  pointer-events: none;
+  animation: dollars-fade-in 0.3s ease;
+}
+
+.history-separator span {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--primary-color);
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+}
+
+html[data-theme='dark'] .history-separator {
+  background-color: #3c3e40;
+}
+
+/* Browse Position Separator - 上次浏览位置 bar */
+.browse-separator {
+  display: block;
+  position: relative;
+  text-align: center;
+  margin: 12px -19px;
+  width: calc(100% + 38px);
+  height: 30px;
+  line-height: 30px;
+  background-color: rgba(var(--primary-color-rgb, 249, 109, 142), 0.1);
+  z-index: 2;
+  pointer-events: none;
+  animation: dollars-fade-in 0.3s ease;
+}
+
+.browse-separator span {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--primary-color);
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0 12px;
+}
+
+html[data-theme='dark'] .browse-separator {
+  background-color: rgba(249, 109, 142, 0.15);
+}
+
+/* Unread Separator - 未读消息 bar */
+.unread-separator {
+  display: block;
+  position: relative;
+  text-align: center;
+  margin: 12px -19px;
+  width: calc(100% + 38px);
+  height: 30px;
+  line-height: 30px;
+  background-color: rgba(255, 255, 255, 0.9);
+  z-index: 2;
+  pointer-events: none;
+  animation: dollars-fade-in 0.3s ease;
+}
+
+.unread-separator span {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--primary-color);
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0 12px;
+}
+
+html[data-theme='dark'] .unread-separator {
+  background-color: rgba(60, 62, 64, 0.9);
+}
+
+/* =========================================
+   Re:Dollars Homepage Card
+   ========================================= */
+#dollars-card {
+  transition: transform 0.1s ease-out, box-shadow 0.3s ease;
+  transform-style: preserve-3d;
+  perspective: 1000px;
+  border: 1px solid var(--primary-color) !important;
+  background-color: var(--dollars-bg);
+  cursor: pointer;
+}
+
+#dollars-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    url('https://lsky.ry.mk/i/2026/01/03/background.svg'),
+    linear-gradient(160deg,
+      color-mix(in srgb, var(--primary-color), #a0c4ff 50%) 0%,
+      color-mix(in srgb, var(--primary-color), #ffffff 50%) 50%,
+      color-mix(in srgb, var(--primary-color), #ffc6ff 50%) 100%);
+  background-repeat: repeat, no-repeat;
+  background-position: 300px, center;
+  background-size: 300px auto, cover;
+  background-blend-mode: overlay, normal;
+  opacity: 1;
+  transition: opacity 0.3s ease, background-position 0.1s ease-out;
+}
+
+html[data-theme='dark'] #dollars-card {
+  border: 1px solid var(--primary-color);
+  background: initial;
+}
+
+html[data-theme='dark'] #dollars-card::before {
+  background: linear-gradient(160deg,
+      var(--primary-color) 0%,
+      color-mix(in srgb, var(--primary-color), transparent 40%) 100%);
+  -webkit-mask-image: url('https://lsky.ry.mk/i/2026/01/03/background.svg');
+  mask-image: url('https://lsky.ry.mk/i/2026/01/03/background.svg');
+  mask-repeat: repeat;
+  mask-size: 300px;
+  mask-position: 300px;
+}
+
+#dollars-card:hover {
+  transform: scale(1.02);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+
+
+/* =========================================
+   Dock Chat Button - Flashing Animation
+   ========================================= */
+#dock-chat-link {
+  position: relative;
+}
+
+#dock-chat-link.flashing {
+  animation: dock-flash 1s ease-in-out infinite;
+}
+
+@keyframes dock-flash {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.3;
+  }
+}
+
+/* Dock notification badge */
+.dock-notif-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background-color: #f96d8e;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+  display: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
