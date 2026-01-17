@@ -30,7 +30,8 @@ import {
     getFirstUnreadId,
     hasUnreadMessages,
     lastReadId,
-    searchQuery
+    searchQuery,
+    initialMessagesLoaded
 } from '@/stores/chat';
 import { toggleSearch } from '@/stores/ui';
 import { blockedUsers, userInfo } from '@/stores/user';
@@ -531,8 +532,9 @@ export function ChatBody() {
         if (!isChatOpen.value) return;
 
         const loadInitialMessages = async () => {
-            const ids = messageIds.value;
-            if (ids.length > 0) {
+            // 使用 initialMessagesLoaded 而不是 messageIds.length 来判断
+            // 因为 WebSocket 可能在窗口打开前就接收了新消息，但这些不应该阻止加载初始消息
+            if (initialMessagesLoaded.value) {
                 syncPresenceSubscriptions();
                 return;
             }
@@ -603,6 +605,7 @@ export function ChatBody() {
                                 syncPresenceSubscriptions();
                                 isLoadingHistory.value = false;
                                 isContextLoading.value = false;
+                                initialMessagesLoaded.value = true;
                             });
                         });
 
@@ -618,7 +621,7 @@ export function ChatBody() {
                 const recentMessages = await fetchRecentMessages(50);
                 if (recentMessages.length > 0) {
                     const filtered = recentMessages.filter(m => !blockedUsers.value.has(String(m.uid)));
-                    setMessages(filtered);
+                    appendMessages(filtered);
 
                     if (filtered.length > 0) {
                         historyOldestId.value = filtered[0].id;
@@ -635,11 +638,13 @@ export function ChatBody() {
                             syncPresenceSubscriptions();
                             isLoadingHistory.value = false;
                             isContextLoading.value = false;
+                            initialMessagesLoaded.value = true;
                         });
                     });
                 } else {
                     isLoadingHistory.value = false;
                     isContextLoading.value = false;
+                    initialMessagesLoaded.value = true;
                 }
             } catch (e) {
                 isLoadingHistory.value = false;

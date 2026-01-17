@@ -1,6 +1,7 @@
 import { useRef, useEffect, useState } from 'preact/hooks';
 import { isChatOpen } from '@/stores/chat';
 import { isMobileViewport, isMaximized, isSearchActive, isNarrowLayout, mobileChatViewActive, checkNarrowLayout, resetLayoutCheck, ensureNarrowLayoutChatView } from '@/stores/ui';
+import { settings } from '@/stores/user';
 import { ChatHeader } from './ChatHeader';
 import { ChatBody } from './ChatBody';
 import { ChatInput } from './ChatInput';
@@ -13,13 +14,25 @@ interface ChatWindowProps {
     skipEntryAnimation?: boolean;
 }
 
+// 辅助函数：保存窗口位置和大小（仅在启用记忆状态时）
+function saveWindowPosition(element: HTMLDivElement) {
+    if (!settings.value.rememberOpenState) return;
+    
+    localStorage.setItem('dollarsChatPosition', JSON.stringify({
+        x: element.offsetLeft,
+        y: element.offsetTop,
+        width: element.offsetWidth,
+        height: element.offsetHeight
+    }));
+}
+
 export function ChatWindow({ skipEntryAnimation = false }: ChatWindowProps) {
     const windowRef = useRef<HTMLDivElement>(null);
     useWebSocket();
-    
+
     // 入场动画控制
     const [animateIn, setAnimateIn] = useState(skipEntryAnimation);
-    
+
     useEffect(() => {
         if (!skipEntryAnimation) {
             // 需要入场动画：下一帧添加 visible 类
@@ -65,8 +78,17 @@ export function ChatWindow({ skipEntryAnimation = false }: ChatWindowProps) {
         const dx = e.clientX - dragState.current.startX;
         const dy = e.clientY - dragState.current.startY;
 
-        windowRef.current.style.left = `${dragState.current.initialLeft + dx}px`;
-        windowRef.current.style.top = `${dragState.current.initialTop + dy}px`;
+        const width = windowRef.current.offsetWidth;
+        const height = windowRef.current.offsetHeight;
+        const maxLeft = Math.max(0, window.innerWidth - width);
+        const maxTop = Math.max(0, window.innerHeight - height);
+
+        // 限制在窗口范围内
+        const newLeft = Math.min(Math.max(0, dragState.current.initialLeft + dx), maxLeft);
+        const newTop = Math.min(Math.max(0, dragState.current.initialTop + dy), maxTop);
+
+        windowRef.current.style.left = `${newLeft}px`;
+        windowRef.current.style.top = `${newTop}px`;
     };
 
     const handleDragEnd = () => {
@@ -76,18 +98,13 @@ export function ChatWindow({ skipEntryAnimation = false }: ChatWindowProps) {
 
         // 保存位置和大小
         if (windowRef.current) {
-            localStorage.setItem('dollarsChatPosition', JSON.stringify({
-                x: windowRef.current.offsetLeft,
-                y: windowRef.current.offsetTop,
-                width: windowRef.current.offsetWidth,
-                height: windowRef.current.offsetHeight
-            }));
+            saveWindowPosition(windowRef.current);
         }
     };
 
     // 恢复位置和大小
     useEffect(() => {
-        if (isMobileViewport.value) return;
+        if (isMobileViewport.value || isMaximized.value || !settings.value.rememberOpenState) return;
 
         try {
             const saved = localStorage.getItem('dollarsChatPosition');
@@ -101,6 +118,50 @@ export function ChatWindow({ skipEntryAnimation = false }: ChatWindowProps) {
         } catch (e) {
             // 忽略
         }
+    }, []);
+
+    // 监听浏览器窗口大小变化，确保位置不越界
+    useEffect(() => {
+        let rafId: number;
+
+        const handleResize = () => {
+            if (rafId) return;
+
+            rafId = requestAnimationFrame(() => {
+                rafId = 0;
+                if (!windowRef.current || isMobileViewport.value || isMaximized.value) return;
+
+                const rect = windowRef.current.getBoundingClientRect();
+                const width = rect.width;
+                const height = rect.height;
+                const maxLeft = Math.max(0, window.innerWidth - width);
+                const maxTop = Math.max(0, window.innerHeight - height);
+
+                let newLeft = rect.left;
+                let newTop = rect.top;
+                let needsUpdate = false;
+
+                if (newLeft > maxLeft) {
+                    newLeft = maxLeft;
+                    needsUpdate = true;
+                }
+                if (newTop > maxTop) {
+                    newTop = maxTop;
+                    needsUpdate = true;
+                }
+
+                if (needsUpdate) {
+                    windowRef.current.style.left = `${newLeft}px`;
+                    windowRef.current.style.top = `${newTop}px`;
+                }
+            });
+        };
+
+        window.addEventListener('resize', handleResize);
+        return () => {
+            window.removeEventListener('resize', handleResize);
+            if (rafId) cancelAnimationFrame(rafId);
+        };
     }, []);
 
     // 监听窗口大小变化，检测是否需要 narrow 布局
@@ -191,12 +252,7 @@ export function ChatWindow({ skipEntryAnimation = false }: ChatWindowProps) {
 
         // 保存位置和大小
         if (windowRef.current) {
-            localStorage.setItem('dollarsChatPosition', JSON.stringify({
-                x: windowRef.current.offsetLeft,
-                y: windowRef.current.offsetTop,
-                width: windowRef.current.offsetWidth,
-                height: windowRef.current.offsetHeight
-            }));
+            saveWindowPosition(windowRef.current);
         }
     };
 

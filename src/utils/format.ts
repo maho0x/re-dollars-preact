@@ -14,13 +14,9 @@ export const escapeHTML = (str: string): string =>
  * HTML 解码
  */
 export const decodeHTML = (str: string): string => {
-    try {
-        const div = document.createElement('div');
-        div.innerHTML = String(str ?? '');
-        return div.textContent || '';
-    } catch {
-        return String(str ?? '');
-    }
+    const div = document.createElement('div');
+    div.innerHTML = String(str ?? '');
+    return div.textContent || '';
 };
 
 /**
@@ -45,11 +41,8 @@ export const formatDate = (ts: number, fmt: 'time' | 'key' | 'full' | 'label' = 
 /**
  * 移除所有 BBCode 标签
  */
-export const stripAllBBCodes = (t: string): string =>
+export const stripBBCode = (t: string): string =>
     t?.replace(/\[.*?\]/g, '').replace(/\s+/g, ' ').trim() || '';
-
-// Alias for stripAllBBCodes
-export const stripBBCode = stripAllBBCodes;
 
 // stripQuotes moved to bbcode.ts to avoid duplication
 
@@ -91,12 +84,6 @@ export function debounce<T extends (...args: any[]) => any>(fn: T, delay = 400) 
     };
     return debounced as T & { flush: T };
 }
-
-/**
- * 判断是否接近底部
- */
-export const isNearBottom = (el: HTMLElement, threshold = 100): boolean =>
-    el.scrollHeight - el.scrollTop - el.clientHeight <= threshold;
 
 /**
  * 计算图片样式

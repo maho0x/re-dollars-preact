@@ -153,16 +153,8 @@ export function getUnreadMessageCount(): number {
     return count;
 }
 
-// 兼容别名
-export const lastReadMessageId = lastBrowseMessageId;
-export const saveLastReadPosition = (id: number) => saveBrowsePosition(id, id);
-export const loadLastReadPosition = () => loadBrowsePosition()?.top ?? null;
-
 function getCurrentUserId(): string {
-    if (typeof window !== 'undefined' && (window as any).CHOBITS_UID) {
-        return String((window as any).CHOBITS_UID);
-    }
-    return '';
+    return String((window as any).CHOBITS_UID || '');
 }
 
 // 消息存储
@@ -178,12 +170,6 @@ export const messageIds = computed<number[]>(() => {
     });
 });
 
-export const messages = computed<Message[]>(() => {
-    const ids = messageIds.value;
-    const map = messageMap.value;
-    return ids.map(id => map.get(id)!).filter(Boolean);
-});
-
 // 会话列表
 export const conversations = signal<Conversation[]>([
     {
@@ -196,8 +182,8 @@ export const conversations = signal<Conversation[]>([
     }
 ]);
 
-const savedChatOpen = typeof localStorage !== 'undefined' ? localStorage.getItem('dollars.isChatOpen') : null;
-export const isChatOpen = signal(savedChatOpen ? JSON.parse(savedChatOpen) : true);
+// 初始化时不从 localStorage 恢复，等待 settings 加载后再决定
+export const isChatOpen = signal(false);
 export const activeConversationId = signal('dollars');
 export const isLoadingHistory = signal(false);
 export const historyFullyLoaded = signal(false);
@@ -205,6 +191,7 @@ export const historyOldestId = signal<number | null>(null);
 export const historyNewestId = signal<number | null>(null);
 export const timelineIsLive = signal(true);
 export const isContextLoading = signal(false);
+export const initialMessagesLoaded = signal(false);
 
 // 回复/编辑
 export const replyingTo = signal<{
@@ -251,13 +238,6 @@ export const notifications = signal<Notification[]>([]);
 
 // 计算属性
 export const unreadCount = computed(() => unreadJumpList.value.length);
-
-export interface GroupedMessage {
-    message: Message;
-    isSelf: boolean;
-    isGrouped: boolean;
-    isGroupedWithNext: boolean;
-}
 
 export function getMessageGrouping(msgId: number): { isSelf: boolean; isGrouped: boolean; isGroupedWithNext: boolean } {
     const map = messageMap.peek();
@@ -348,7 +328,7 @@ export function addMessage(msg: Message) {
                 const ids = new Set(newMessageIds.value);
                 ids.delete(msg.id);
                 newMessageIds.value = ids;
-            }, 300);
+            }, 350);
         }
 
         pendingScrollToBottom.value = true;
@@ -396,7 +376,7 @@ export function addOptimisticMessage(content: string, user: { id: string; nickna
             const ids = new Set(newMessageIds.value);
             ids.delete(tempId);
             newMessageIds.value = ids;
-        }, 300);
+        }, 350);
 
         pendingScrollToBottom.value = true;
     });
@@ -549,11 +529,17 @@ export async function loadMessageContext(messageId: number): Promise<{ targetInd
 
 /**
  * 打开/关闭聊天窗口
+ * @param open - 是否打开
+ * @param skipSave - 是否跳过保存到 localStorage（用于初始化恢复）
  */
-export function toggleChat(open?: boolean) {
+export function toggleChat(open?: boolean, skipSave = false) {
     const newState = open ?? !isChatOpen.value;
     isChatOpen.value = newState;
-    localStorage.setItem('dollars.isChatOpen', JSON.stringify(newState));
+    
+    // 保存状态（除非明确跳过）
+    if (!skipSave) {
+        localStorage.setItem('dollars.isChatOpen', JSON.stringify(newState));
+    }
 }
 
 /**

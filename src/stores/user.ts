@@ -20,6 +20,7 @@ export const settings = signal<Settings>({
     sharePresence: false,
     notificationType: 'off',
     loadImages: true,
+    rememberOpenState: false,
 
     backgroundMode: 'tint',
 });

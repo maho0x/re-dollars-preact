@@ -169,30 +169,90 @@ export function SearchPanel() {
         }
     };
 
+    // 日期选择 Input Ref
+    const dateInputRef = useRef<HTMLInputElement>(null);
+
+    // 打开日期选择器
+    const openDatePicker = () => {
+        // use showPicker() if supported (modern browsers)
+        if (dateInputRef.current) {
+            if ('showPicker' in HTMLInputElement.prototype) {
+                try {
+                    (dateInputRef.current as any).showPicker();
+                } catch (err) {
+                    dateInputRef.current.click();
+                }
+            } else {
+                dateInputRef.current.click();
+            }
+        }
+    };
+
+    // 处理日期变更
+    const handleDateChange = async (e: Event) => {
+        const date = (e.target as HTMLInputElement).value;
+        if (!date) return;
+
+        // 调用后端 API 获取该日期第一条消息 ID
+        const { getFirstMessageIdByDate } = await import('@/utils/api');
+        const msgId = await getFirstMessageIdByDate(date);
+
+        if (msgId) {
+            // 使用伪造的 Message 对象调用 handleResultClick 复用跳转逻辑
+            // 只需要 id 即可，其他字段不重要
+            handleResultClick({ id: msgId } as Message);
+        } else {
+            // 简单提示（可以考虑改为 Toast）
+            alert(`日期 ${date} 没有找到消息`);
+        }
+
+        // 清空选择，以便下次还能选同一天（虽然意义不大，但符合习惯）
+        (e.target as HTMLInputElement).value = '';
+    };
+
     if (!isSearchActive.value) return null;
 
     return (
         <div id="dollars-search-ui">
-            <div class="search-bar">
+
+            <div class="search-panel-row">
+                <div class="search-bar" style={{ flex: 1, marginBottom: 0 }}>
+                    <div
+                        class="search-icon"
+                        style={{ display: 'flex', alignItems: 'center', opacity: 0.5 }}
+                        dangerouslySetInnerHTML={{ __html: SVGIcons.search }}
+                    />
+                    <input
+                        ref={inputRef}
+                        type="search"
+                        placeholder="搜索消息..."
+                        value={searchQuery.value}
+                        onInput={handleInput}
+                        autoFocus
+                    />
+                    <div
+                        class="search-close-btn"
+                        onClick={handleClose}
+                        dangerouslySetInnerHTML={{ __html: SVGIcons.close }}
+                    />
+                </div>
+
+                {/* 独立的日期跳转按钮 */}
                 <div
-                    class="search-icon"
-                    style={{ display: 'flex', alignItems: 'center', opacity: 0.5 }}
-                    dangerouslySetInnerHTML={{ __html: SVGIcons.search }}
-                />
-                <input
-                    ref={inputRef}
-                    type="search"
-                    placeholder="搜索消息..."
-                    value={searchQuery.value}
-                    onInput={handleInput}
-                    autoFocus
-                />
-                <div
-                    class="search-close-btn"
-                    onClick={handleClose}
-                    dangerouslySetInnerHTML={{ __html: SVGIcons.close }}
+                    class="search-calendar-btn"
+                    onClick={openDatePicker}
+                    title="按日期跳转"
+                    dangerouslySetInnerHTML={{ __html: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon icon-tabler icons-tabler-outline icon-tabler-calendar"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M4 7a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2v-12" /><path d="M16 3v4" /><path d="M8 3v4" /><path d="M4 11h16" /><path d="M11 15h1" /><path d="M12 15v3" /></svg>` }}
                 />
             </div>
+
+            {/* Hidden Date Input */}
+            <input
+                type="date"
+                ref={dateInputRef}
+                onChange={handleDateChange}
+                style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', width: 0, height: 0 }}
+            />
 
             <div id="dollars-search-results" onScroll={handleScroll}>
                 {results.value.map(msg => (

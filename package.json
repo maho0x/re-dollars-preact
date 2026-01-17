@@ -14,7 +14,10 @@
     },
     "devDependencies": {
         "@preact/preset-vite": "^2.9.4",
+        "@vitest/coverage-v8": "^4.0.17",
+        "fast-check": "^4.5.3",
         "typescript": "^5.7.2",
-        "vite": "^6.0.7"
+        "vite": "^6.0.7",
+        "vitest": "^4.0.17"
     }
 }

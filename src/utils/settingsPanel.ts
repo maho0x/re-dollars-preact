@@ -1,4 +1,5 @@
 import { settings, saveSettings, isLoggedIn, userInfo } from '@/stores/user';
+import { isChatOpen } from '@/stores/chat';
 import { performLogin, performLogout } from '@/utils/api';
 import type { Settings } from '@/types';
 import { getChiiLib } from '@/utils/globals';
@@ -49,6 +50,12 @@ const settingsConfig: SettingsConfigItem[] = [
         label: '默认加载图片',
     },
     {
+        key: 'rememberOpenState',
+        type: 'checkbox',
+        label: '记忆窗口状态',
+        onchange: handleRememberOpenStateChange,
+    },
+    {
         key: 'sendShortcut',
         type: 'radio',
         label: '发送快捷键',
@@ -82,6 +89,27 @@ function applyBackgroundPattern() {
     if (root) {
         root.dataset.bgMode = settings.value.backgroundMode;
         root.classList.remove('no-background-pattern');
+    }
+}
+
+function handleRememberOpenStateChange() {
+    // 如果关闭了记忆状态，清除所有保存的窗口状态
+    if (!settings.value.rememberOpenState) {
+        localStorage.removeItem('dollars.isChatOpen');
+        localStorage.removeItem('dollars.isMaximized');
+        localStorage.removeItem('dollars.mobileChatViewActive');
+        localStorage.removeItem('dollarsChatPosition');
+    } else {
+        // 如果开启了记忆状态，保存当前所有窗口状态
+        localStorage.setItem('dollars.isChatOpen', JSON.stringify(isChatOpen.value));
+        
+        // 导入 UI 状态
+        import('@/stores/ui').then(({ isMaximized, mobileChatViewActive }) => {
+            localStorage.setItem('dollars.isMaximized', JSON.stringify(isMaximized.value));
+            localStorage.setItem('dollars.mobileChatViewActive', JSON.stringify(mobileChatViewActive.value));
+        }).catch(() => {
+            // 忽略错误
+        });
     }
 }
 

@@ -63,10 +63,6 @@ export function removeFavorite(url: string) {
     saveFavorites(newList);
 }
 
-export function isFavorite(url: string) {
-    return favorites.value.includes(url);
-}
-
 function saveFavorites(list: string[], syncBackend = true) {
     // Save to cloud
     const cloud = getChiiApp().cloud_settings;

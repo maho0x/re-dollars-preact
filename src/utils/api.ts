@@ -115,6 +115,20 @@ export async function sendMessage(content: string): Promise<{ status: boolean; m
 }
 
 /**
+ * 获取指定日期的第一条消息 ID
+ */
+export async function getFirstMessageIdByDate(date: string): Promise<number | null> {
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/messages/by-date?date=${date}&first_id_only=true`);
+        if (!res.ok) return null;
+        const data = await res.json();
+        return data.status ? data.id : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+/**
  * 编辑消息
  */
 export async function editMessage(messageId: number, content: string): Promise<{ status: boolean; error?: string }> {
@@ -435,5 +449,40 @@ export async function lookupUsersByName(usernames: string[]): Promise<Record<str
         return data.data || {};
     } catch (e) {
         return {};
+    }
+}
+
+/**
+ * 更新已读状态
+ */
+export async function updateReadStatus(lastReadId: number): Promise<void> {
+    try {
+        await fetch(`${BACKEND_URL}/api/messages/read`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                ...getAuthHeaders(),
+            },
+            credentials: 'include',
+            body: JSON.stringify({ last_read_id: lastReadId }),
+        });
+    } catch (e) {
+        // ignore
+    }
+}
+
+/**
+ * 获取已读状态
+ */
+export async function fetchReadStatus(): Promise<number> {
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/messages/read`, {
+            headers: getAuthHeaders(),
+            credentials: 'include',
+        });
+        const data = await res.json();
+        return data.status ? data.last_read_id : 0;
+    } catch (e) {
+        return 0;
     }
 }

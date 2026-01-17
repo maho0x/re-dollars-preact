@@ -72,6 +72,7 @@ export interface Settings {
     sharePresence: boolean;
     notificationType: 'off' | 'detail' | 'simple';
     loadImages: boolean;
+    rememberOpenState: boolean;
 
     backgroundMode: 'tint' | 'transparent' | 'lines';
 }

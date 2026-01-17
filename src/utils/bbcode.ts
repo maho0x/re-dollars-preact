@@ -2,12 +2,30 @@ import { escapeHTML, calculateImageStyle, getAvatarUrl } from './format';
 import { settings } from '@/stores/user';
 import { SMILIES } from './smilies';
 
+// 标准化 Bangumi 链接，将 bangumi.tv/bgm.tv/chii.in 转换为相对路径
+function normalizeBangumiUrl(url: string): string {
+    try {
+        const urlObj = new URL(url);
+        const hostname = urlObj.hostname.toLowerCase();
+        
+        // 检查是否是 Bangumi 相关域名
+        if (hostname === 'bangumi.tv' || hostname === 'bgm.tv' || hostname === 'chii.in') {
+            // 返回相对路径（去掉协议和域名）
+            return urlObj.pathname + urlObj.search + urlObj.hash;
+        }
+    } catch (e) {
+        // URL 解析失败，返回原始 URL
+    }
+    return url;
+}
+
 // 生成预览卡片 HTML
 function generatePreviewCardHTML(
     data: { title?: string; description?: string; image?: string },
     originalUrl: string
 ): string {
     if (!data) return '';
+    const normalizedUrl = normalizeBangumiUrl(originalUrl);
     const title = escapeHTML(data.title || originalUrl);
     const desc = data.description ? escapeHTML(data.description) : '';
     const domain = originalUrl.includes('//') ? originalUrl.split('/')[2].replace(/^www\\./, '') : '';
@@ -21,7 +39,7 @@ function generatePreviewCardHTML(
     }
 
     return `
-        <a href="${escapeHTML(originalUrl)}" target="_blank" rel="noopener noreferrer" class="dollars-preview-card" data-entity-type="generic">
+        <a href="${escapeHTML(normalizedUrl)}" target="_blank" rel="noopener noreferrer" class="dollars-preview-card" data-entity-type="generic">
             ${coverHTML}
             <div class="inner">
                 <p class="title" title="${title}">${title}</p>
@@ -61,6 +79,30 @@ export function processBBCode(
 
     // 遮罩
     html = html.replace(/\[mask\]([\s\S]+?)\[\/mask\]/gi, '<span class="text_mask"><span class="inner">$1</span></span>');
+
+    // 遮罩内的图片 - 特殊处理：显示 blurhash，点击后加载
+    html = html.replace(/<span class="text_mask"><span class="inner">\[img\]([\s\S]+?)\[\/img\]<\/span><\/span>/gi, (m, src) => {
+        const cleanSrc = src.replace(/<[^>]*>?/gm, '').trim();
+        if (!/^https?:\/\/[^\s<>"']+$/i.test(cleanSrc)) return escapeHTML(m);
+
+        if (options.isInsideQuote) {
+            return `<span class="text_mask"><span class="inner"><a href="${cleanSrc}" target="_blank">[图片]</a></span></span>`;
+        }
+
+        const meta = imageMeta[cleanSrc];
+        const imageStyle = calculateImageStyle(meta);
+        const hasBlurhash = meta && (meta.placeholder || meta.blurhash);
+
+        const blurhashCanvasHTML = hasBlurhash
+            ? `<canvas class="blurhash-canvas" data-blurhash="${meta.placeholder || meta.blurhash}"></canvas>`
+            : `<div style="background-color: var(--bgm-bg-odd); width:100%; height:100%;"></div>`;
+
+        // 遮罩图片始终使用占位符模式
+        return `<div class="image-container image-placeholder image-masked" style="${imageStyle}" data-iw="${meta?.width || ''}" data-ih="${meta?.height || ''}" data-src="${cleanSrc}">
+            ${blurhashCanvasHTML}
+            <div class="image-load-hint">显示图片</div>
+        </div>`;
+    });
 
     // 自定义表情
     html = html.replace(/\[emoji\]([\s\S]+?)\[\/emoji\]/gi, (m, src) => {
@@ -102,10 +144,19 @@ export function processBBCode(
         const meta = imageMeta[cleanSrc];
         const imageStyle = calculateImageStyle(meta);
         const hasBlurhash = meta && (meta.placeholder || meta.blurhash);
+        const shouldLoadImage = settings.value.loadImages;
 
         const blurhashCanvasHTML = hasBlurhash
             ? `<canvas class="blurhash-canvas" data-blurhash="${meta.placeholder || meta.blurhash}"></canvas>`
             : `<div style="background-color: var(--bgm-bg-odd); width:100%; height:100%;"></div>`;
+
+        // 如果不自动加载图片，只显示 blurhash 占位符，点击后加载
+        if (!shouldLoadImage) {
+            return `<div class="image-container image-placeholder" style="${imageStyle}" data-iw="${meta?.width || ''}" data-ih="${meta?.height || ''}" data-src="${cleanSrc}">
+                ${blurhashCanvasHTML}
+                <div class="image-load-hint">点击加载图片</div>
+            </div>`;
+        }
 
         return `<div class="image-container" style="${imageStyle}" data-iw="${meta?.width || ''}" data-ih="${meta?.height || ''}">
             ${blurhashCanvasHTML}
@@ -141,7 +192,8 @@ export function processBBCode(
 
     // URL 链接
     html = html.replace(/\[url=([^\]]+?)\]([\s\S]+?)\[\/url\]/gi, (_, url, label) => {
-        const linkHtml = `<a href="${escapeHTML(url)}" target="_blank" rel="noopener noreferrer">${label}</a>`;
+        const normalizedUrl = normalizeBangumiUrl(url);
+        const linkHtml = `<a href="${escapeHTML(normalizedUrl)}" target="_blank" rel="noopener noreferrer">${label}</a>`;
 
         // 如果不在引用内且启用了链接预览，收集预览卡片到 collector
         if (!options.isInsideQuote && settings.value.linkPreview && linkPreviews && linkPreviews[url] && options.previewsCollector) {
@@ -172,7 +224,8 @@ export function processBBCode(
         const lastClose = before.lastIndexOf('>');
         if (lastOpen > lastClose) return url;
 
-        const linkHtml = `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`;
+        const normalizedUrl = normalizeBangumiUrl(url);
+        const linkHtml = `<a href="${normalizedUrl}" target="_blank" rel="noopener noreferrer">${url}</a>`;
 
         // 如果不在引用内且启用了链接预览，收集预览卡片到 collector
         if (!options.isInsideQuote && settings.value.linkPreview && linkPreviews && linkPreviews[url] && options.previewsCollector) {

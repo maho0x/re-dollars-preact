@@ -3,6 +3,7 @@ import { isMobile } from '@/utils/detect';
 import { memo } from 'preact/compat';
 import { DollarsBlurHash } from '@/utils/blurhash';
 import { messageStore, setReplyTo, newMessageIds, pendingMessageIds } from '@/stores/chat';
+import { settings } from '@/stores/user';
 import type { Message } from '@/types';
 import { processBBCode, renderReplyQuote, stripQuotes } from '@/utils/bbcode';
 import { escapeHTML, formatDate, getAvatarUrl, generateReactionTooltip } from '@/utils/format';
@@ -79,7 +80,7 @@ export const MessageItem = memo(({ message, isSelf, isGrouped, isGroupedWithNext
         }
 
         return html;
-    }, [messageId, messageText, isDeleted, replyToId, replyDetails, imageMeta, linkPreviews]);
+    }, [messageId, messageText, isDeleted, replyToId, replyDetails, imageMeta, linkPreviews, settings.value.linkPreview, settings.value.loadImages]);
 
     // 使用 IntersectionObserver 延迟渲染重内容
     useEffect(() => {
@@ -196,21 +197,76 @@ export const MessageItem = memo(({ message, isSelf, isGrouped, isGroupedWithNext
         const el = messageRef.current;
         if (!el) return;
 
-        const imgs = el.querySelectorAll('.full-image');
-        if (imgs.length === 0) return;
-
-        const imageUrls = Array.from(imgs).map(img => (img as HTMLImageElement).src);
         const handlers: Array<{ el: Element, fn: (e: Event) => void }> = [];
 
-        imgs.forEach((img, index) => {
+        // 为图片添加点击查看器事件的辅助函数
+        const addImageViewerHandler = (img: HTMLImageElement) => {
             const handler = (e: Event) => {
                 e.preventDefault();
                 e.stopPropagation();
-                showImageViewer(imageUrls, index);
+                // 获取当前所有已加载的图片
+                const allImgs = el.querySelectorAll('.full-image');
+                const imageUrls = Array.from(allImgs).map(i => (i as HTMLImageElement).src);
+                const index = imageUrls.indexOf(img.src);
+                showImageViewer(imageUrls, Math.max(0, index));
             };
             img.addEventListener('click', handler);
-            (img as HTMLElement).style.cursor = 'zoom-in';
+            img.style.cursor = 'zoom-in';
             handlers.push({ el: img, fn: handler });
+        };
+
+        // 处理占位符点击加载图片
+        const placeholders = el.querySelectorAll('.image-placeholder[data-src]');
+        placeholders.forEach((placeholder) => {
+            const container = placeholder as HTMLElement;
+            const handler = (e: Event) => {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                const src = container.dataset.src;
+                if (!src) return;
+                
+                // 移除提示文字
+                const hint = container.querySelector('.image-load-hint');
+                if (hint) hint.remove();
+                
+                // 创建并添加图片
+                const img = document.createElement('img');
+                img.src = src;
+                img.className = 'full-image';
+                img.alt = 'image';
+                img.loading = 'lazy';
+                img.decoding = 'async';
+                img.referrerPolicy = 'no-referrer';
+                
+                img.onload = () => {
+                    img.classList.add('is-loaded');
+                    container.classList.add('is-loaded');
+                    container.classList.remove('image-placeholder');
+                    // 为新加载的图片添加点击查看器事件
+                    addImageViewerHandler(img);
+                };
+                
+                img.onerror = () => {
+                    img.src = '/img/no_img.gif';
+                    img.classList.add('is-loaded', 'load-failed');
+                    container.classList.add('is-loaded');
+                    container.classList.remove('image-placeholder');
+                };
+                
+                container.appendChild(img);
+                
+                // 移除点击事件
+                container.removeEventListener('click', handler);
+            };
+            container.addEventListener('click', handler);
+            handlers.push({ el: container, fn: handler });
+        });
+
+        // 处理已加载图片的点击 (Lightbox)
+        const imgs = el.querySelectorAll('.full-image');
+        imgs.forEach((img) => {
+            addImageViewerHandler(img as HTMLImageElement);
         });
 
         return () => {
@@ -386,15 +442,16 @@ export const MessageItem = memo(({ message, isSelf, isGrouped, isGroupedWithNext
                 triggerReply();
             }
         } else if (isTap) {
-            // Mobile tap to open menu (except images/links/quotes/avatars/masks)
+            // Mobile tap to open menu (except images/links/quotes/avatars/masks/image-placeholders)
             const target = e.target as HTMLElement;
             const isImage = target.tagName === 'IMG' || target.closest('.full-image');
+            const isImagePlaceholder = target.closest('.image-placeholder');
             const isLink = target.closest('a');
             const isQuote = target.closest('.chat-quote[data-jump-to-id]');
             const isAvatar = target.closest('.avatar');
-            const isMask = target.closest('.text_mask');
+            const isMask = target.closest('.text_mask') && !target.closest('.image-masked');
 
-            if (!isImage && !isLink && !isQuote && !isAvatar && !isMask) {
+            if (!isImage && !isImagePlaceholder && !isLink && !isQuote && !isAvatar && !isMask) {
                 // If menu is already open, don't open a new one (let click close it)
                 if (isContextMenuOpen.peek()) return;
                 // Don't open context menu if profile card or smiley panel is open (let click close them)

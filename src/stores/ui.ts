@@ -3,8 +3,10 @@ import { signal } from '@preact/signals';
 // UI 状态
 export const isMobileViewport = signal(window.innerWidth <= 768);
 export const isNarrowLayout = signal(false);
+
+// 初始化时不恢复状态，等待设置加载后再决定
 export const isMaximized = signal(false);
-export const mobileChatViewActive = signal(false); // 初始化为 false，等布局检测后再应用
+export const mobileChatViewActive = signal(false);
 
 // 面板状态
 export const isSmileyPanelOpen = signal(false);
@@ -31,11 +33,9 @@ export const imageViewerImages = signal<string[]>([]);
 export const imageViewerIndex = signal(0);
 
 // 监听窗口大小
-if (typeof window !== 'undefined') {
-    window.addEventListener('resize', () => {
-        isMobileViewport.value = window.innerWidth <= 768;
-    });
-}
+window.addEventListener('resize', () => {
+    isMobileViewport.value = window.innerWidth <= 768;
+});
 
 // 显示上下文菜单
 export function showContextMenu(x: number, y: number, targetId: string | null, imageUrl?: string | null, bmoCode?: string | null) {
@@ -142,11 +142,22 @@ export function toggleSearch(active?: boolean) {
 // 切换最大化
 export function toggleMaximize() {
     isMaximized.value = !isMaximized.value;
+    
+    import('@/stores/user').then(({ settings }) => {
+        if (settings.value.rememberOpenState) {
+            localStorage.setItem('dollars.isMaximized', JSON.stringify(isMaximized.value));
+        }
+    });
 }
 
 export function setMobileChatView(active: boolean) {
     mobileChatViewActive.value = active;
-    localStorage.setItem('dollars.mobileChatViewActive', JSON.stringify(active));
+    
+    import('@/stores/user').then(({ settings }) => {
+        if (settings.value.rememberOpenState) {
+            localStorage.setItem('dollars.mobileChatViewActive', JSON.stringify(active));
+        }
+    });
 }
 
 // 标记是否已完成首次布局检测
@@ -163,13 +174,17 @@ export function checkNarrowLayout(width: number) {
     const isNowNarrow = width < 600 || isMobileViewport.value;
     isNarrowLayout.value = isNowNarrow;
 
-    // 首次检测：直接设置状态
+    // 首次检测：如果没有保存的状态，则根据布局设置默认值
     if (!hasInitializedLayout) {
         hasInitializedLayout = true;
-        if (isNowNarrow) {
-            mobileChatViewActive.value = true;
-        } else {
-            mobileChatViewActive.value = false;
+        // 只有在没有保存状态时才设置默认值
+        const savedMobileChatView = localStorage.getItem('dollars.mobileChatViewActive');
+        if (savedMobileChatView === null) {
+            if (isNowNarrow) {
+                mobileChatViewActive.value = true;
+            } else {
+                mobileChatViewActive.value = false;
+            }
         }
         return;
     }

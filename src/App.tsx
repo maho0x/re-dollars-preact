@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'preact/hooks';
 import { ChatWindow } from './components/ChatWindow';
 import { initUserInfo, loadSettingsFromCloud, isLoggedIn, userInfo, settings, initializeBlockedUsers } from '@/stores/user';
 import { isChatOpen } from '@/stores/chat';
+import { isMaximized } from '@/stores/ui';
 import { initFavorites } from '@/stores/favorites';
 import { checkAuth } from '@/utils/api';
 import { integrateWithNativeSettingsPanel, applyAllSettings } from '@/utils/settingsPanel';
@@ -41,6 +42,25 @@ export function App() {
             applyAllSettings();
 
             settingsLoaded.value = true;
+
+            // 恢复窗口状态（如果启用了记忆状态）
+            if (settings.value.rememberOpenState) {
+                try {
+                    // 恢复窗口打开状态
+                    const savedChatOpen = localStorage.getItem('dollars.isChatOpen');
+                    if (savedChatOpen !== null) {
+                        isChatOpen.value = JSON.parse(savedChatOpen);
+                    }
+                    
+                    // 恢复最大化状态
+                    const savedMaximized = localStorage.getItem('dollars.isMaximized');
+                    if (savedMaximized !== null) {
+                        isMaximized.value = JSON.parse(savedMaximized);
+                    }
+                } catch (e) {
+                    // 忽略错误
+                }
+            }
 
             const notifType = settings.value.notificationType;
             if (notifType === 'detail') {
