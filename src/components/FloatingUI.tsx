@@ -17,9 +17,9 @@ import {
     clearBrowsePosition,
     getFirstUnreadId,
     hasUnreadMessages,
-    updateLastReadId,
+    updateReadState,
     messageIds,
-    getUnreadMessageCount
+    unreadCount
 } from '@/stores/chat';
 import { inputAreaHeight } from '@/stores/ui';
 import { fetchRecentMessages } from '@/utils/api';
@@ -50,7 +50,7 @@ export function FloatingUI() {
         e.preventDefault();
 
         // Mode 1: 跳转到未读消息
-        if (scrollButtonMode.value === 'to-unread' && hasUnreadMessages()) {
+        if (scrollButtonMode.value === 'to-unread' && hasUnreadMessages.value) {
             const firstUnreadId = getFirstUnreadId();
             if (firstUnreadId) {
                 pendingJumpToMessage.value = firstUnreadId;
@@ -67,7 +67,7 @@ export function FloatingUI() {
         // 更新已读位置到最新消息
         const ids = messageIds.value;
         if (ids.length > 0) {
-            updateLastReadId(ids[ids.length - 1]);
+            updateReadState(ids[ids.length - 1]);
         }
 
         // 如果已经在 live 模式，直接平滑滚动到底部
@@ -121,7 +121,7 @@ export function FloatingUI() {
     const showMentionBtn = unreadJumpList.value.length > 0;
     const scrollBtnClasses = `nav-btn ${showScrollBottomBtn.value ? 'visible' : ''} mode-${scrollButtonMode.value}`;
     // 使用 lastReadId 计算未读数量
-    const unreadCount = getUnreadMessageCount();
+    const currentUnreadCount = unreadCount.value;
 
     const getTooltip = () => {
         return scrollButtonMode.value === 'to-unread' ? '跳转到未读消息' : '跳转到最新消息';
@@ -140,8 +140,10 @@ export function FloatingUI() {
                 style={{ bottom: `${mentionBtnBottom}px` }}
                 title="跳转到提及消息"
             >
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M12 5v14m-7-7l7 7 7-7" />
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+                    <path d="M8 12a4 4 0 1 0 8 0a4 4 0 1 0 -8 0" />
+                    <path d="M16 12v1.5a2.5 2.5 0 0 0 5 0v-1.5a9 9 0 1 0 -5.5 8.28" />
                 </svg>
                 {unreadJumpList.value.length > 0 && (
                     <div id="dollars-mention-badge" style={{
@@ -176,9 +178,9 @@ export function FloatingUI() {
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M12 5v14m-7-7l7 7 7-7" />
                 </svg>
-                {unreadCount > 0 && (
+                {currentUnreadCount > 0 && (
                     <div id="dollars-unread-badge" style={{ display: 'block' }}>
-                        {unreadCount > 99 ? '99+' : unreadCount}
+                        {currentUnreadCount > 99 ? '99+' : currentUnreadCount}
                     </div>
                 )}
             </div>

@@ -111,7 +111,7 @@ export function ProfileCard() {
 
     const handleHistory = () => {
         if (profile) {
-            searchQuery.value = `from:${profile.username}`;
+            searchQuery.value = `user:${profile.username}`;
             toggleSearch(true);
             hideProfileCard();
         }

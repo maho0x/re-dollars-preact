@@ -227,9 +227,12 @@ export async function uploadFile(file: File): Promise<{
     });
 
     const data = await res.json();
-    // 兼容后端返回字段: imageUrl -> url
+    // 兼容后端返回字段: imageUrl/videoUrl -> url
     if (data.status && data.imageUrl) {
         data.url = data.imageUrl;
+    }
+    if (data.status && data.videoUrl) {
+        data.url = data.videoUrl;
     }
     // 确保 URL 是完整路径
     if (data.status && data.url && !data.url.startsWith('http')) {

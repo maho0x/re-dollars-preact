@@ -18,6 +18,7 @@ import {
     isAtBottom,
     timelineIsLive,
     showScrollBottomBtn,
+    markSentMessageAsRead
 } from '@/stores/chat';
 
 import { getUnreadCount, fetchNewerMessages } from '@/utils/api';
@@ -460,7 +461,11 @@ function handleWebSocketMessage(data: any) {
                 const normalizedMsg = normalizeMessage(msg);
                 if (!getMessageById(normalizedMsg.id)) {
                     addMessage(normalizedMsg);
-                    if (String(normalizedMsg.uid) !== currentUserId) {
+                    
+                    // 如果是自己发送的消息，自动标记为已读
+                    if (String(normalizedMsg.uid) === currentUserId) {
+                        markSentMessageAsRead(normalizedMsg.id);
+                    } else {
                         newUnreadCount++;
                     }
                 }

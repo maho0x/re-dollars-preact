@@ -1,157 +1,13 @@
 import { signal, computed, batch } from '@preact/signals';
 import type { Message, Notification, Conversation } from '@/types';
 import { MESSAGE_GROUP_TIME_GAP } from '@/utils/constants';
-import { debounce } from '@/utils/format';
-import { getChiiApp } from '@/utils/globals';
 
-// 浏览位置持久化
-const BROWSE_POS_KEY = 'dollars_pos_dollars';
-const LAST_READ_KEY = 'dollars_last_read';
+// 导出新的已读状态和浏览位置管理模块
+export * from './readState';
+export * from './browsePosition';
 
-interface BrowsePosition {
-    top: number;
-    bottom: number;
-}
-
-export const lastBrowsePosition = signal<BrowsePosition | null>(null);
-export const lastBrowseMessageId = signal<number | null>(null);
-export const lastReadId = signal<number | null>(null);
+// UI 状态
 export const scrollButtonMode = signal<'to-unread' | 'to-bottom'>('to-bottom');
-
-// 追踪上一次保存到云端的值
-let lastSavedBrowseValue = '';
-let lastSavedReadValue = '';
-
-// 防抖保存浏览位置
-const debouncedSaveBrowseToCloud = debounce((position: BrowsePosition | null) => {
-    try {
-        const cloud = getChiiApp().cloud_settings;
-        const valueStr = position ? JSON.stringify(position) : '';
-
-        if (valueStr === lastSavedBrowseValue) return;
-
-        if (position) {
-            cloud.update({ [BROWSE_POS_KEY]: valueStr });
-        } else {
-            cloud.delete(BROWSE_POS_KEY);
-        }
-
-        cloud.save();
-        lastSavedBrowseValue = valueStr;
-    } catch (e) {
-        // ignore
-    }
-}, 1000);
-
-// 防抖保存已读位置
-const debouncedSaveReadToCloud = debounce((readId: number | null) => {
-    try {
-        const cloud = getChiiApp().cloud_settings;
-        const valueStr = readId ? String(readId) : '';
-
-        if (valueStr === lastSavedReadValue) return;
-
-        if (readId) {
-            cloud.update({ [LAST_READ_KEY]: valueStr });
-        } else {
-            cloud.delete(LAST_READ_KEY);
-        }
-
-        cloud.save();
-        lastSavedReadValue = valueStr;
-    } catch (e) {
-        // ignore
-    }
-}, 1000);
-
-export function saveBrowsePosition(topId: number, bottomId: number) {
-    const position = { top: topId, bottom: bottomId };
-    lastBrowsePosition.value = position;
-    lastBrowseMessageId.value = topId;
-    debouncedSaveBrowseToCloud(position);
-}
-
-export function loadBrowsePosition(): BrowsePosition | null {
-    try {
-        const cloud = getChiiApp().cloud_settings;
-        const settings = cloud.getAll();
-        const value = settings?.[BROWSE_POS_KEY];
-        if (value) {
-            const parsed = JSON.parse(value) as BrowsePosition;
-            if (parsed.top && parsed.bottom) {
-                lastBrowsePosition.value = parsed;
-                lastBrowseMessageId.value = parsed.top;
-                return parsed;
-            }
-        }
-    } catch (e) { /* ignore */ }
-    return null;
-}
-
-export function clearBrowsePosition() {
-    lastBrowsePosition.value = null;
-    lastBrowseMessageId.value = null;
-    debouncedSaveBrowseToCloud(null);
-}
-
-export function updateLastReadId(messageId: number) {
-    const current = lastReadId.value;
-    if (!current || messageId > current) {
-        lastReadId.value = messageId;
-        debouncedSaveReadToCloud(messageId);
-    }
-}
-
-export function loadLastReadId(): number | null {
-    try {
-        const cloud = getChiiApp().cloud_settings;
-        const settings = cloud.getAll();
-        const value = settings?.[LAST_READ_KEY];
-        if (value) {
-            const parsed = parseInt(value, 10);
-            if (!isNaN(parsed)) {
-                const current = lastReadId.value;
-                // 只有当云端值更大时才更新，确保已读位置只增不减
-                if (!current || parsed > current) {
-                    lastReadId.value = parsed;
-                }
-                return Math.max(parsed, current || 0) || parsed;
-            }
-        }
-    } catch (e) { /* ignore */ }
-    return null;
-}
-
-export function getFirstUnreadId(): number | null {
-    const readId = lastReadId.value;
-    if (!readId) return null;
-
-    const ids = messageIds.peek();
-    for (const id of ids) {
-        if (id > readId) return id;
-    }
-    return null;
-}
-
-export function hasUnreadMessages(): boolean {
-    const readId = lastReadId.value;
-    if (!readId) return false;
-
-    const ids = messageIds.peek();
-    return ids.length > 0 && ids[ids.length - 1] > readId;
-}
-
-export function getUnreadMessageCount(): number {
-    const readId = lastReadId.value;
-    if (!readId) return 0;
-
-    const ids = messageIds.value;
-    let count = 0;
-    for (const id of ids) {
-        if (id > readId) count++;
-    }
-    return count;
-}
 
 function getCurrentUserId(): string {
     return String((window as any).CHOBITS_UID || '');
@@ -236,8 +92,8 @@ export const typingUsers = signal<Map<string, string>>(new Map());
 // 通知
 export const notifications = signal<Notification[]>([]);
 
-// 计算属性
-export const unreadCount = computed(() => unreadJumpList.value.length);
+// 计算属性：提及消息数量
+export const mentionCount = computed(() => unreadJumpList.value.length);
 
 export function getMessageGrouping(msgId: number): { isSelf: boolean; isGrouped: boolean; isGroupedWithNext: boolean } {
     const map = messageMap.peek();

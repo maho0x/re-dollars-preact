@@ -21,17 +21,19 @@ import {
     isChatOpen,
     pendingJumpToMessage,
     scrollButtonMode,
-    saveBrowsePosition,
-    loadBrowsePosition,
-    clearBrowsePosition,
     isAtBottom,
-    updateLastReadId,
-    loadLastReadId,
+    searchQuery,
+    initialMessagesLoaded,
+    // 新的已读状态和浏览位置管理
+    loadReadState,
+    updateReadState,
     getFirstUnreadId,
     hasUnreadMessages,
     lastReadId,
-    searchQuery,
-    initialMessagesLoaded
+    unreadCount,
+    saveBrowsePosition,
+    loadBrowsePosition,
+    clearBrowsePosition
 } from '@/stores/chat';
 import { toggleSearch } from '@/stores/ui';
 import { blockedUsers, userInfo } from '@/stores/user';
@@ -149,14 +151,24 @@ export function ChatBody() {
         }
 
         // --- 保存当前浏览位置 ---
+        // 只有在用户主动向上滚动（离开底部）时才保存浏览位置
+        // 如果在底部，则清除浏览位置（表示用户想要 live 模式）
         if (listRef.current) {
-            // 找到视口顶部和底部的消息
-            const topVisibleMsg = getTopVisibleMessageId();
+            if (atBottom && timelineIsLive.value) {
+                // 在底部：清除浏览位置
+                clearBrowsePosition();
+            } else {
+                // 不在底部：保存浏览位置
+                const topVisibleMsg = getTopVisibleMessageId();
+                if (topVisibleMsg) {
+                    saveBrowsePosition(topVisibleMsg);
+                }
+            }
+            
+            // 更新已读位置（使用底部可见消息，只增不减）
             const bottomVisibleMsg = getBottomVisibleMessageId();
-            if (topVisibleMsg && bottomVisibleMsg) {
-                saveBrowsePosition(topVisibleMsg, bottomVisibleMsg);
-                // 更新已读位置 (只增不减)
-                updateLastReadId(bottomVisibleMsg);
+            if (bottomVisibleMsg) {
+                updateReadState(bottomVisibleMsg);
             }
         }
 
@@ -213,7 +225,7 @@ export function ChatBody() {
         if (!bodyRef.current) return;
 
         // 检查是否有未读消息
-        if (hasUnreadMessages()) {
+        if (hasUnreadMessages.value) {
             const firstUnreadId = getFirstUnreadId();
             if (firstUnreadId) {
                 // 检查第一条未读消息是否在视口下方
@@ -390,6 +402,7 @@ export function ChatBody() {
                     timelineIsLive.value = true;
                     unreadWhileScrolled.value = 0;
                     showScrollBottomBtn.value = false;
+                    clearBrowsePosition(); // 清除浏览位置，切换到 live 模式
                     syncPresenceSubscriptions();
                 }
             } else {
@@ -397,6 +410,7 @@ export function ChatBody() {
                 timelineIsLive.value = true;
                 unreadWhileScrolled.value = 0;
                 showScrollBottomBtn.value = false;
+                clearBrowsePosition(); // 清除浏览位置，切换到 live 模式
                 syncPresenceSubscriptions();
             }
         } catch (e) {
@@ -541,31 +555,29 @@ export function ChatBody() {
 
             isLoadingHistory.value = true;
             isContextLoading.value = true;
-            loadLastReadId();
+            
+            // 从后端加载已读状态
+            await loadReadState();
 
             try {
                 const savedBrowse = loadBrowsePosition();
-                let shouldRestorePosition = false;
-                let pendingUnreadCount = 0;
+                const currentUnreadCount = unreadCount.value;
 
-                if (savedBrowse && savedBrowse.top && savedBrowse.bottom) {
-                    const uid = Number(userInfo.value.id);
-                    if (uid) {
-                        const unreadResult = await getUnreadCount(savedBrowse.bottom, uid);
-                        if (unreadResult) {
-                            pendingUnreadCount = unreadResult.count;
-                        }
-                    }
-                    if (pendingUnreadCount > 5) {
-                        shouldRestorePosition = true;
-                    }
-                }
+                console.log('[Browse Position Debug]', {
+                    savedBrowse,
+                    currentUnreadCount,
+                    lastReadId: lastReadId.value,
+                });
 
-                if (shouldRestorePosition && savedBrowse) {
-                    unreadWhileScrolled.value = pendingUnreadCount;
-                    showScrollBottomBtn.value = true;
+                // 如果有保存的浏览位置，恢复到该位置
+                if (savedBrowse) {
+                    console.log('[Browse Position] Attempting to restore to message:', savedBrowse.anchorMessageId);
+                    
+                    // 恢复到浏览位置
+                    unreadWhileScrolled.value = currentUnreadCount;
+                    showScrollBottomBtn.value = currentUnreadCount > 0;
 
-                    const contextResult = await fetchMessageContext(savedBrowse.top, 25, 50);
+                    const contextResult = await fetchMessageContext(savedBrowse.anchorMessageId, 25, 50);
                     if (contextResult && contextResult.messages.length > 0) {
                         const filtered = contextResult.messages.filter(
                             m => !blockedUsers.value.has(String(m.uid))
@@ -582,24 +594,24 @@ export function ChatBody() {
 
                         requestAnimationFrame(() => {
                             requestAnimationFrame(() => {
-                                // 插入上次浏览位置分隔线
-                                insertBrowseSeparator(String(savedBrowse.bottom));
-
                                 // 插入未读消息分隔线（在第一条未读消息之前）
                                 const readId = lastReadId.value;
                                 if (readId) {
                                     const firstUnreadId = filtered.find(m => m.id > readId)?.id;
-                                    if (firstUnreadId && firstUnreadId !== savedBrowse.bottom + 1) {
-                                        // 只有当未读位置和浏览位置不同时才显示
+                                    if (firstUnreadId) {
                                         insertUnreadSeparator(String(firstUnreadId));
                                     }
                                 }
 
-                                const browseEl = document.getElementById(`db-${savedBrowse.top}`);
+                                // 滚动到锚点消息
+                                const browseEl = document.getElementById(`db-${savedBrowse.anchorMessageId}`);
                                 if (browseEl && bodyRef.current) {
                                     bodyRef.current.scrollTop = browseEl.offsetTop - 10;
+                                    console.log('[Browse Position] Restored successfully');
                                 } else if (bodyRef.current) {
+                                    // 锚点消息不在加载的范围内，滚动到顶部
                                     bodyRef.current.scrollTop = 0;
+                                    console.warn('[Browse Position] Anchor message not found in loaded messages, scrolled to top');
                                 }
 
                                 syncPresenceSubscriptions();
@@ -610,6 +622,11 @@ export function ChatBody() {
                         });
 
                         return;
+                    } else {
+                        // 浏览位置的消息不存在或加载失败，清除无效的浏览位置
+                        console.warn('[Browse Position] Failed to load context, clearing invalid browse position');
+                        clearBrowsePosition();
+                        // 继续执行 fallback 逻辑
                     }
                 }
 

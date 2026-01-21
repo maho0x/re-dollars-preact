@@ -1,5 +1,5 @@
 import { useRef, useState, useCallback, useEffect } from 'preact/hooks';
-import { replyingTo, editingMessage, cancelReplyOrEdit, addOptimisticMessage, removeOptimisticMessage, pendingMention } from '@/stores/chat';
+import { replyingTo, editingMessage, cancelReplyOrEdit, addOptimisticMessage, removeOptimisticMessage, pendingMention, setReplyTo } from '@/stores/chat';
 import { toggleSmileyPanel, isSmileyPanelOpen, inputAreaHeight } from '@/stores/ui';
 import { userInfo, settings } from '@/stores/user';
 import { sendMessage as apiSendMessage, editMessage as apiEditMessage, uploadFile, lookupUsersByName } from '@/utils/api';
@@ -10,6 +10,7 @@ import { TypingIndicator } from './TypingIndicator';
 import { SmileyPanel } from './SmileyPanel';
 import { TextFormatter } from './TextFormatter';
 import { MentionCompleter } from './MentionCompleter';
+import { saveDraft, loadDraft, clearDraft, cleanupExpiredDrafts, type ReplyInfo } from '@/stores/drafts';
 
 export function ChatInput() {
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -21,6 +22,7 @@ export function ChatInput() {
     const isTypingRef = useRef(false);
     const attachLongPressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const isAttachLongPressRef = useRef(false);
+    const draftSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // 处理附件按钮点击（图片/视频）
     const handleAttachClick = () => {
@@ -88,6 +90,25 @@ export function ChatInput() {
                 isTypingRef.current = false;
             }
         }, 2500);
+
+        // 自动保存草稿（防抖 1 秒）
+        if (!editingMessage.value) {
+            if (draftSaveTimerRef.current) {
+                clearTimeout(draftSaveTimerRef.current);
+            }
+            draftSaveTimerRef.current = setTimeout(() => {
+                const content = textarea.value.trim();
+                const reply = replyingTo.value;
+                const replyInfo: ReplyInfo | null = reply ? {
+                    id: reply.id,
+                    uid: reply.uid,
+                    user: reply.user,
+                    avatar: reply.avatar,
+                    text: reply.text
+                } : null;
+                saveDraft(content, replyInfo);
+            }, 1000);
+        }
     }, []);
 
     // Handle long-press avatar mention
@@ -139,6 +160,33 @@ export function ChatInput() {
             replacementMap.has(username) ? `${prefix}${replacementMap.get(username)}` : match
         );
     };
+
+    // 加载草稿（初始化时）
+    useEffect(() => {
+        const textarea = textareaRef.current;
+        if (!textarea) return;
+
+        // 如果是编辑模式，不加载草稿
+        if (editingMessage.value) return;
+
+        const draft = loadDraft();
+
+        if (draft) {
+            // 恢复输入内容
+            if (draft.content) {
+                textarea.value = draft.content;
+                handleInput();
+            }
+
+            // 恢复回复状态
+            if (draft.replyTo) {
+                setReplyTo(draft.replyTo);
+            }
+        }
+
+        // 清理过期草稿
+        cleanupExpiredDrafts();
+    }, []);
 
     // Populate textarea when entering edit mode
     useEffect(() => {
@@ -204,6 +252,10 @@ export function ChatInput() {
                 // 清空输入框 (立即响应)
                 textarea.value = '';
                 textarea.style.height = 'auto';
+                
+                // 清除草稿
+                clearDraft();
+                
                 cancelReplyOrEdit();
                 textarea.focus(); // 保持焦点，防止键盘收起
 
@@ -360,11 +412,11 @@ export function ChatInput() {
                         <button
                             class="reply-cancel-btn"
                             onClick={() => {
-                                cancelReplyOrEdit();
                                 if (textareaRef.current) {
                                     textareaRef.current.value = '';
                                     textareaRef.current.style.height = 'auto';
                                 }
+                                cancelReplyOrEdit();
                             }}
                         >
                             ✕

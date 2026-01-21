@@ -1110,7 +1110,7 @@ html[data-theme="dark"] .bubble-nickname {
   opacity: 0;
   width: 32px;
   height: 32px;
-  background-image: url('data:image/svg+xml;charset=UTF-8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="%23888" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>');
+  background-image: url('data:image/svg+xml;charset=UTF-8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="%23888" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M9 14l-4 -4l4 -4" /><path d="M5 10h11a4 4 0 1 1 0 8h-1" /></svg>');
   background-size: 24px;
   background-repeat: no-repeat;
   background-position: center;
@@ -1119,7 +1119,7 @@ html[data-theme="dark"] .bubble-nickname {
 }
 
 html[data-theme="dark"] .chat-message .swipe-reply-indicator {
-  background-image: url('data:image/svg+xml;charset=UTF-8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="%23bbb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>');
+  background-image: url('data:image/svg+xml;charset=UTF-8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="%23bbb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M9 14l-4 -4l4 -4" /><path d="M5 10h11a4 4 0 1 1 0 8h-1" /></svg>');
 }
 
 /* 连续发言隐藏昵称 */
@@ -2766,11 +2766,28 @@ html[data-theme="dark"] #dollars-settings-btn-header {
   background-image: url('data:image/svg+xml;charset=UTF-8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%23bbb" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.325 4.317c.426 -1.756 2.924 -1.756 3.35 0a1.724 1.724 0 0 0 2.573 1.066c1.543 -.94 3.31 .826 2.37 2.37a1.724 1.724 0 0 0 1.065 2.572c1.756 .426 1.756 2.924 0 3.35a1.724 1.724 0 0 0 -1.066 2.573c.94 1.543 -.826 3.31 -2.37 2.37a1.724 1.724 0 0 0 -2.572 1.065c-.426 1.756 -2.924 1.756 -3.35 0a1.724 1.724 0 0 0 -2.573 -1.066c-1.543 .94 -3.31 -.826 -2.37 -2.37a1.724 1.724 0 0 0 -1.065 -2.572c-1.756 -.426 -1.756 -2.924 0 -3.35a1.724 1.724 0 0 0 1.066 -2.573c-.94 -1.543 .826 -3.31 2.37 -2.37c1 .608 2.296 .07 2.572 -1.065z" /><circle cx="12" cy="12" r="3" /></svg>');
 }
 
-/* Dark mode override removed as it uses CSS variables now */
-/*html[data-theme="dark"] #dollars-text-formatter {
-  background: rgba(45, 45, 45, 0.95);
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
-}*/
+/* =========================================
+   Text Formatter (BBCode Toolbar)
+   ========================================= */
+#dollars-text-formatter {
+  position: fixed;
+  z-index: var(--dollars-z-index-context);
+  /* Glass Surface Effect */
+  background: var(--dollars-glass-bg);
+  backdrop-filter: var(--dollars-glass-blur);
+  -webkit-backdrop-filter: var(--dollars-glass-blur);
+  box-shadow: var(--dollars-glass-shadow);
+  border: 1px solid var(--dollars-glass-border-color);
+  border-radius: 50px;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  opacity: 0;
+  transform: translateY(10px) scale(0.95);
+  pointer-events: none;
+  transition: opacity 0.2s cubic-bezier(0.2, 0.8, 0.2, 1),
+    transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
 
 #dollars-text-formatter.visible {
   opacity: 1;

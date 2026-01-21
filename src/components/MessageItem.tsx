@@ -276,11 +276,12 @@ export const MessageItem = memo(({ message, isSelf, isGrouped, isGroupedWithNext
         };
     }, [content]);
 
-    // 判断是否为贴纸模式
+    // 判断是否为贴纸模式（只有单个图片或表情，没有其他文字）
     const isSticker = useMemo(() => {
         if (isDeleted) return false;
         const raw = (messageText || '').trim();
-        return /^(\[img\]|\[emoji\])[\s\S]+?(\[\/img\]|\[\/emoji\])$/i.test(raw) && !replyToId;
+        // 只匹配单个 [img] 或 [emoji] 标签，且前后没有其他内容
+        return /^(\[img\][^\[]+\[\/img\]|\[emoji\][^\[]+\[\/emoji\])$/i.test(raw) && !replyToId;
     }, [messageText, isDeleted, replyToId]);
 
     // 时间戳
