@@ -1586,6 +1586,120 @@ html[data-theme="dark"] .chat-quote {
   padding: 0;
 }
 
+/* Image Preview Strip */
+.image-preview-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px;
+  margin: 0 4px;
+  border-bottom: 1px solid var(--dollars-glass-border);
+  height: 0;
+  opacity: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  transition: height 0.2s ease-out, opacity 0.2s ease-out, padding 0.2s ease-out, margin 0.2s ease-out;
+  scrollbar-width: none;
+}
+
+.image-preview-container.visible {
+  height: 80px;
+  opacity: 1;
+  padding-bottom: 8px;
+  margin-bottom: 4px;
+  margin-top: 4px;
+}
+
+.image-preview-container::-webkit-scrollbar {
+  display: none;
+}
+
+.image-preview-item {
+  position: relative;
+  flex-shrink: 0;
+  width: 64px;
+  height: 64px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--dollars-border);
+  background: var(--dollars-bg);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.preview-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.2s;
+}
+
+.image-preview-item:hover .preview-image {
+  transform: scale(1.05);
+}
+
+.preview-remove-btn {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 18px;
+  height: 18px;
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 50%;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  /* Slightly larger X */
+  cursor: pointer;
+  border: none;
+  backdrop-filter: blur(2px);
+  transition: background 0.2s, transform 0.1s;
+  padding: 0;
+  line-height: 1;
+}
+
+.preview-remove-btn:hover {
+  background: rgba(244, 67, 54, 0.9);
+  transform: scale(1.1);
+}
+
+/* Video Preview Styles */
+.video-preview-item {
+  position: relative;
+}
+
+.preview-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.2s;
+}
+
+.video-preview-item:hover .preview-video {
+  transform: scale(1.05);
+}
+
+.video-play-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 32px;
+  height: 32px;
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  backdrop-filter: blur(2px);
+}
+
+.video-play-overlay svg {
+  margin-left: 2px;
+}
+
 .input-wrapper {
   display: flex;
   align-items: center;

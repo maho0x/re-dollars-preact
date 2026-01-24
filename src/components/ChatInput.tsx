@@ -1,6 +1,6 @@
 import { useRef, useState, useCallback, useEffect } from 'preact/hooks';
 import { replyingTo, editingMessage, cancelReplyOrEdit, addOptimisticMessage, removeOptimisticMessage, pendingMention, setReplyTo } from '@/stores/chat';
-import { toggleSmileyPanel, inputAreaHeight } from '@/stores/ui';
+import { toggleSmileyPanel, inputAreaHeight, showImageViewer } from '@/stores/ui';
 import { userInfo, settings } from '@/stores/user';
 import { sendMessage as apiSendMessage, editMessage as apiEditMessage, uploadFile, lookupUsersByName } from '@/utils/api';
 import { sendTypingStart, sendTypingStop } from '@/hooks/useWebSocket';
@@ -18,6 +18,7 @@ export function ChatInput() {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [isSending, setIsSending] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
+    const [previewMedia, setPreviewMedia] = useState<Array<{ type: 'image' | 'video'; url: string }>>([]);
     const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const isTypingRef = useRef(false);
     const attachLongPressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -67,10 +68,80 @@ export function ChatInput() {
         }
     };
 
+    // 解析图片和视频
+    const parseMediaFiles = (text: string) => {
+        const imgRegex = /\[img\](.*?)\[\/img\]/g;
+        const videoRegex = /\[video\](.*?)\[\/video\]/g;
+        
+        const media: Array<{ type: 'image' | 'video'; url: string; position: number }> = [];
+        
+        // 收集所有图片
+        let match;
+        while ((match = imgRegex.exec(text)) !== null) {
+            media.push({ type: 'image', url: match[1], position: match.index });
+        }
+        
+        // 收集所有视频
+        while ((match = videoRegex.exec(text)) !== null) {
+            media.push({ type: 'video', url: match[1], position: match.index });
+        }
+        
+        // 按出现顺序排序
+        media.sort((a, b) => a.position - b.position);
+        
+        setPreviewMedia(prev => {
+            if (prev.length === media.length && 
+                prev.every((item, i) => item.type === media[i].type && item.url === media[i].url)) {
+                return prev;
+            }
+            return media.map(({ type, url }) => ({ type, url }));
+        });
+    };
+
+    // 移除媒体文件
+    const handleRemoveMedia = (index: number) => {
+        const textarea = textareaRef.current;
+        if (!textarea) return;
+
+        const text = textarea.value;
+        const media = previewMedia[index];
+        if (!media) return;
+
+        const regex = media.type === 'image' 
+            ? /\[img\](.*?)\[\/img\]/g 
+            : /\[video\](.*?)\[\/video\]/g;
+        
+        let matchIndex = 0;
+        let currentMediaIndex = 0;
+
+        // 计算当前媒体在同类型中的索引
+        for (let i = 0; i < index; i++) {
+            if (previewMedia[i].type === media.type) {
+                matchIndex++;
+            }
+        }
+
+        const newText = text.replace(regex, (match) => {
+            if (currentMediaIndex === matchIndex) {
+                currentMediaIndex++;
+                return '';
+            }
+            currentMediaIndex++;
+            return match;
+        });
+
+        textarea.value = newText;
+        handleInput();
+        textarea.focus();
+    };
+
     // 自动增长
     const handleInput = useCallback(() => {
         const textarea = textareaRef.current;
         if (!textarea) return;
+
+        // Parse images and videos on input
+        parseMediaFiles(textarea.value);
 
         textarea.style.height = 'auto';
         textarea.style.height = `${Math.min(textarea.scrollHeight, 150)}px`;
@@ -175,7 +246,10 @@ export function ChatInput() {
             // 恢复输入内容
             if (draft.content) {
                 textarea.value = draft.content;
-                handleInput();
+                // 使用 setTimeout 确保在 DOM 渲染后计算高度，避免高度抖动/计算错误
+                setTimeout(() => {
+                    handleInput(); // This will trigger parseImages
+                }, 0);
             }
 
             // 恢复回复状态
@@ -252,6 +326,7 @@ export function ChatInput() {
                 // 清空输入框 (立即响应)
                 textarea.value = '';
                 textarea.style.height = 'auto';
+                setPreviewMedia([]); // Clear all media previews
 
                 // 清除草稿
                 clearDraft();
@@ -421,6 +496,54 @@ export function ChatInput() {
                         >
                             ✕
                         </button>
+                    </div>
+                )}
+
+                {/* Media Preview (Images and Videos) */}
+                {previewMedia.length > 0 && (
+                    <div class="image-preview-container visible">
+                        {previewMedia.map((media, index) => (
+                            <div key={index} class={`image-preview-item ${media.type === 'video' ? 'video-preview-item' : ''}`}>
+                                {media.type === 'image' ? (
+                                    <img
+                                        src={media.url}
+                                        class="preview-image"
+                                        onClick={() => {
+                                            const imageUrls = previewMedia
+                                                .filter(m => m.type === 'image')
+                                                .map(m => m.url);
+                                            const imageIndex = previewMedia
+                                                .slice(0, index)
+                                                .filter(m => m.type === 'image')
+                                                .length;
+                                            showImageViewer(imageUrls, imageIndex);
+                                        }}
+                                        style={{ cursor: 'zoom-in' }}
+                                    />
+                                ) : (
+                                    <>
+                                        <video
+                                            src={media.url}
+                                            class="preview-video"
+                                            muted
+                                            preload="metadata"
+                                        />
+                                        <div class="video-play-overlay">
+                                            <svg viewBox="0 0 24 24" width="24" height="24" fill="white">
+                                                <path d="M8 5v14l11-7z"/>
+                                            </svg>
+                                        </div>
+                                    </>
+                                )}
+                                <button
+                                    class="preview-remove-btn"
+                                    onClick={() => handleRemoveMedia(index)}
+                                    title={media.type === 'image' ? '删除图片' : '删除视频'}
+                                >
+                                    ✕
+                                </button>
+                            </div>
+                        ))}
                     </div>
                 )}
 
