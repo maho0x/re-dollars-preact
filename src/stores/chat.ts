@@ -147,6 +147,7 @@ export function addMessage(msg: Message) {
     batch(() => {
         const map = new Map(messageMap.value);
         let replacedOptimistic = false;
+        let inheritedStableKey: string | undefined;
 
         // 如果是自己发的消息，检查是否有对应的乐观消息需要替换
         // 通过匹配消息内容来找到对应的乐观消息
@@ -155,7 +156,8 @@ export function addMessage(msg: Message) {
             for (const pendingId of pendingIds) {
                 const pendingMsg = map.get(pendingId);
                 if (pendingMsg && pendingMsg.message === msg.message && pendingMsg.uid === msg.uid) {
-                    // 找到匹配的乐观消息，删除它
+                    // 找到匹配的乐观消息，继承 stableKey 并删除旧消息
+                    inheritedStableKey = pendingMsg.stableKey;
                     map.delete(pendingId);
                     const newPendingIds = new Set(pendingIds);
                     newPendingIds.delete(pendingId);
@@ -166,23 +168,25 @@ export function addMessage(msg: Message) {
             }
         }
 
-        map.set(msg.id, msg);
+        // 将确认消息添加到 map，如果有 stableKey 则继承
+        const confirmedMsg = inheritedStableKey ? { ...msg, stableKey: inheritedStableKey } : msg;
+        map.set(confirmedMsg.id, confirmedMsg);
         messageMap.value = map;
 
         const store = new Map(messageStore.value);
-        store.set(String(msg.id), { raw: msg.message });
+        store.set(String(confirmedMsg.id), { raw: confirmedMsg.message });
         messageStore.value = store;
 
         // 添加到新消息集合以触发入场动画 (只对非替换消息触发)
         if (!replacedOptimistic) {
             const newIds = new Set(newMessageIds.value);
-            newIds.add(msg.id);
+            newIds.add(confirmedMsg.id);
             newMessageIds.value = newIds;
 
             // 动画完成后移除
             setTimeout(() => {
                 const ids = new Set(newMessageIds.value);
-                ids.delete(msg.id);
+                ids.delete(confirmedMsg.id);
                 newMessageIds.value = ids;
             }, 350);
         }
@@ -207,6 +211,7 @@ export function addOptimisticMessage(content: string, user: { id: string; nickna
         timestamp: Math.floor(Date.now() / 1000),
         reply_to_id: replyToId,
         reply_details: replyDetails,
+        stableKey: `temp-${Math.random().toString(36).slice(2)}`, // Generate stable key
     };
 
     batch(() => {
@@ -391,7 +396,7 @@ export async function loadMessageContext(messageId: number): Promise<{ targetInd
 export function toggleChat(open?: boolean, skipSave = false) {
     const newState = open ?? !isChatOpen.value;
     isChatOpen.value = newState;
-    
+
     // 保存状态（除非明确跳过）
     if (!skipSave) {
         localStorage.setItem('dollars.isChatOpen', JSON.stringify(newState));

@@ -36,7 +36,7 @@ import {
     clearBrowsePosition
 } from '@/stores/chat';
 import { toggleSearch } from '@/stores/ui';
-import { blockedUsers, userInfo } from '@/stores/user';
+import { blockedUsers } from '@/stores/user';
 import { inputAreaHeight } from '@/stores/ui';
 import { MessageItem } from './MessageItem';
 import { fetchHistoryMessages, fetchRecentMessages, fetchMessageContext, fetchNewerMessages, getUnreadCount } from '@/utils/api';
@@ -164,7 +164,7 @@ export function ChatBody() {
                     saveBrowsePosition(topVisibleMsg);
                 }
             }
-            
+
             // 更新已读位置（使用底部可见消息，只增不减）
             const bottomVisibleMsg = getBottomVisibleMessageId();
             if (bottomVisibleMsg) {
@@ -555,7 +555,7 @@ export function ChatBody() {
 
             isLoadingHistory.value = true;
             isContextLoading.value = true;
-            
+
             // 从后端加载已读状态
             await loadReadState();
 
@@ -572,7 +572,7 @@ export function ChatBody() {
                 // 如果有保存的浏览位置，恢复到该位置
                 if (savedBrowse) {
                     console.log('[Browse Position] Attempting to restore to message:', savedBrowse.anchorMessageId);
-                    
+
                     // 恢复到浏览位置
                     unreadWhileScrolled.value = currentUnreadCount;
                     showScrollBottomBtn.value = currentUnreadCount > 0;
@@ -772,7 +772,7 @@ export function ChatBody() {
 
                     return (
                         <MessageItem
-                            key={msgId}
+                            key={msg.stableKey || msgId}
                             message={msg}
                             isSelf={grouping.isSelf}
                             isGrouped={grouping.isGrouped}

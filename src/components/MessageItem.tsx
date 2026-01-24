@@ -1,4 +1,4 @@
-import { useMemo, useRef, useEffect, useCallback } from 'preact/hooks';
+import { useMemo, useRef, useEffect, useCallback, useState } from 'preact/hooks';
 import { isMobile } from '@/utils/detect';
 import { memo } from 'preact/compat';
 import { DollarsBlurHash } from '@/utils/blurhash';
@@ -38,8 +38,12 @@ function arePropsEqual(prev: MessageItemProps, next: MessageItemProps): boolean 
     );
 }
 
+// 长消息折叠阈值 (字符数)
+const COLLAPSE_THRESHOLD = 500;
+
 export const MessageItem = memo(({ message, isSelf, isGrouped, isGroupedWithNext }: MessageItemProps) => {
     const messageRef = useRef<HTMLDivElement>(null);
+    const [isExpanded, setIsExpanded] = useState(false);
 
     // 提取原始值用于依赖
     const messageId = message.id;
@@ -222,14 +226,14 @@ export const MessageItem = memo(({ message, isSelf, isGrouped, isGroupedWithNext
             const handler = (e: Event) => {
                 e.preventDefault();
                 e.stopPropagation();
-                
+
                 const src = container.dataset.src;
                 if (!src) return;
-                
+
                 // 移除提示文字
                 const hint = container.querySelector('.image-load-hint');
                 if (hint) hint.remove();
-                
+
                 // 创建并添加图片
                 const img = document.createElement('img');
                 img.src = src;
@@ -238,7 +242,7 @@ export const MessageItem = memo(({ message, isSelf, isGrouped, isGroupedWithNext
                 img.loading = 'lazy';
                 img.decoding = 'async';
                 img.referrerPolicy = 'no-referrer';
-                
+
                 img.onload = () => {
                     img.classList.add('is-loaded');
                     container.classList.add('is-loaded');
@@ -246,16 +250,16 @@ export const MessageItem = memo(({ message, isSelf, isGrouped, isGroupedWithNext
                     // 为新加载的图片添加点击查看器事件
                     addImageViewerHandler(img);
                 };
-                
+
                 img.onerror = () => {
                     img.src = '/img/no_img.gif';
                     img.classList.add('is-loaded', 'load-failed');
                     container.classList.add('is-loaded');
                     container.classList.remove('image-placeholder');
                 };
-                
+
                 container.appendChild(img);
-                
+
                 // 移除点击事件
                 container.removeEventListener('click', handler);
             };
@@ -443,7 +447,7 @@ export const MessageItem = memo(({ message, isSelf, isGrouped, isGroupedWithNext
                 triggerReply();
             }
         } else if (isTap) {
-            // Mobile tap to open menu (except images/links/quotes/avatars/masks/image-placeholders)
+            // Mobile tap to open menu (except images/links/quotes/avatars/masks/image-placeholders/tags/buttons)
             const target = e.target as HTMLElement;
             const isImage = target.tagName === 'IMG' || target.closest('.full-image');
             const isImagePlaceholder = target.closest('.image-placeholder');
@@ -451,8 +455,11 @@ export const MessageItem = memo(({ message, isSelf, isGrouped, isGroupedWithNext
             const isQuote = target.closest('.chat-quote[data-jump-to-id]');
             const isAvatar = target.closest('.avatar');
             const isMask = target.closest('.text_mask') && !target.closest('.image-masked');
+            const isTag = target.closest('.chat-tag');
+            const isButton = target.closest('button');
+            const isVideo = target.tagName === 'VIDEO' || target.closest('.video-container') || target.closest('video');
 
-            if (!isImage && !isImagePlaceholder && !isLink && !isQuote && !isAvatar && !isMask) {
+            if (!isImage && !isImagePlaceholder && !isLink && !isQuote && !isAvatar && !isMask && !isTag && !isButton && !isVideo) {
                 // If menu is already open, don't open a new one (let click close it)
                 if (isContextMenuOpen.peek()) return;
                 // Don't open context menu if profile card or smiley panel is open (let click close them)
@@ -522,11 +529,29 @@ export const MessageItem = memo(({ message, isSelf, isGrouped, isGroupedWithNext
                         {message.nickname}
                     </span>
 
-                    {/* 消息内容 */}
-                    <div
-                        class="text-content"
-                        dangerouslySetInnerHTML={{ __html: content }}
-                    />
+                    {/* 消息内容 (支持折叠) */}
+                    {(() => {
+                        const shouldCollapse = !isDeleted && messageText.length > COLLAPSE_THRESHOLD && !isExpanded;
+                        return (
+                            <>
+                                <div
+                                    class={`text-content ${shouldCollapse ? 'is-collapsed' : ''}`}
+                                    dangerouslySetInnerHTML={{ __html: content }}
+                                />
+                                {!isDeleted && messageText.length > COLLAPSE_THRESHOLD && (
+                                    <button
+                                        class="expand-toggle-btn"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setIsExpanded(!isExpanded);
+                                        }}
+                                    >
+                                        {isExpanded ? '收起' : '展开全文'}
+                                    </button>
+                                )}
+                            </>
+                        );
+                    })()}
 
                     {/* 内部时间戳 */}
                     <span class="bubble-timestamp" title={fullTimeText}>

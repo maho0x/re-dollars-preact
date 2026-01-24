@@ -34,7 +34,7 @@ function getAuthHeaders(): Record<string, string> {
     // 从 cookie 中获取认证信息
     const cookies = document.cookie.split(';');
     for (const cookie of cookies) {
-        const [name, value] = cookie.trim().split('=');
+        const [name] = cookie.trim().split('=');
         if (name === 'chii_auth' || name === 'chii_sid') {
             headers['Cookie'] = document.cookie;
             break;
@@ -61,9 +61,9 @@ export async function loadReadState(): Promise<number | null> {
             headers: getAuthHeaders(),
             credentials: 'include',
         });
-        
+
         if (!response.ok) return null;
-        
+
         const data = await response.json();
         if (data.status && typeof data.last_read_id === 'number') {
             // 取本地和远程的最大值
@@ -71,12 +71,12 @@ export async function loadReadState(): Promise<number | null> {
             const localId = lastReadId.value || 0;
             const effectiveId = Math.max(remoteId, localId);
             lastReadId.value = effectiveId;
-            
+
             // 如果本地值更大，推送到后端
             if (localId > remoteId) {
                 syncReadStateToBackend(localId);
             }
-            
+
             return effectiveId;
         }
         return null;
@@ -94,7 +94,7 @@ export async function loadReadState(): Promise<number | null> {
 export function updateReadState(messageId: number): void {
     const current = lastReadId.value;
     if (current !== null && messageId <= current) return;
-    
+
     lastReadId.value = messageId;
     pendingReadId.value = messageId;
     debouncedSyncToBackend();
@@ -135,13 +135,13 @@ async function syncReadStateToBackend(messageId: number): Promise<void> {
             credentials: 'include',
             body: JSON.stringify({ user_id: userId, last_read_id: messageId }),
         });
-        
+
         if (!response.ok) {
             // 网络错误时保留 pendingReadId，等待重试
             pendingReadId.value = messageId;
             return;
         }
-        
+
         const data = await response.json();
         // 后端返回实际生效的值 (可能因并发更高)
         if (data.status && typeof data.effective_last_read_id === 'number') {

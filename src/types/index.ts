@@ -26,6 +26,8 @@ export interface Message {
     link_previews?: Record<string, LinkPreview>;
     is_deleted?: boolean;
     edited_at?: number;
+    /** Used for stable DOM key during optimistic message replacement */
+    stableKey?: string;
 }
 
 export interface ReplyDetails {

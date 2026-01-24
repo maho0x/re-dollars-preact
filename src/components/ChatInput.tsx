@@ -1,10 +1,10 @@
 import { useRef, useState, useCallback, useEffect } from 'preact/hooks';
 import { replyingTo, editingMessage, cancelReplyOrEdit, addOptimisticMessage, removeOptimisticMessage, pendingMention, setReplyTo } from '@/stores/chat';
-import { toggleSmileyPanel, isSmileyPanelOpen, inputAreaHeight } from '@/stores/ui';
+import { toggleSmileyPanel, inputAreaHeight } from '@/stores/ui';
 import { userInfo, settings } from '@/stores/user';
 import { sendMessage as apiSendMessage, editMessage as apiEditMessage, uploadFile, lookupUsersByName } from '@/utils/api';
 import { sendTypingStart, sendTypingStop } from '@/hooks/useWebSocket';
-import { SVGIcons, MAX_MESSAGE_LENGTH } from '@/utils/constants';
+import { SVGIcons } from '@/utils/constants';
 import { escapeHTML, getAvatarUrl, debounce } from '@/utils/format';
 import { TypingIndicator } from './TypingIndicator';
 import { SmileyPanel } from './SmileyPanel';
@@ -205,7 +205,7 @@ export function ChatInput() {
         if (!textarea || isSending) return;
 
         const content = textarea.value.trim();
-        if (!content || content.length > MAX_MESSAGE_LENGTH) return;
+        if (!content) return;
 
         setIsSending(true);
 
@@ -252,10 +252,10 @@ export function ChatInput() {
                 // 清空输入框 (立即响应)
                 textarea.value = '';
                 textarea.style.height = 'auto';
-                
+
                 // 清除草稿
                 clearDraft();
-                
+
                 cancelReplyOrEdit();
                 textarea.focus(); // 保持焦点，防止键盘收起
 

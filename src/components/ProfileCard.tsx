@@ -90,7 +90,7 @@ export function ProfileCard() {
 
             document.addEventListener('click', handleClickOutside);
             document.addEventListener('touchend', handleClickOutside);
-            
+
             // 存储清理函数
             (window as any).__dollarsProfileCardCleanup = () => {
                 document.removeEventListener('click', handleClickOutside);
@@ -119,7 +119,7 @@ export function ProfileCard() {
 
     const handleHomepage = () => {
         if (profile) {
-            window.open(`https://bgm.tv/user/${profile.username}`, '_blank');
+            window.open(`/user/${profile.username}`, '_blank');
             hideProfileCard();
         }
     };
