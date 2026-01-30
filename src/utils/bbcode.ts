@@ -7,7 +7,7 @@ function normalizeBangumiUrl(url: string): string {
     try {
         const urlObj = new URL(url);
         const hostname = urlObj.hostname.toLowerCase();
-        
+
         // 检查是否是 Bangumi 相关域名
         if (hostname === 'bangumi.tv' || hostname === 'bgm.tv' || hostname === 'chii.in') {
             // 返回相对路径（去掉协议和域名）
