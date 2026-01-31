@@ -1,5 +1,5 @@
 import { useMemo, useRef, useEffect, useCallback, useState } from 'preact/hooks';
-import { isMobile } from '@/utils/detect';
+import { isMobile } from '@/utils/format';
 import { memo } from 'preact/compat';
 import { DollarsBlurHash } from '@/utils/blurhash';
 import { messageStore, setReplyTo, newMessageIds, pendingMessageIds } from '@/stores/chat';

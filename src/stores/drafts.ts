@@ -56,7 +56,7 @@ export function loadDraft(): Draft | null {
     try {
         const key = getDraftKey();
         const saved = localStorage.getItem(key);
-        
+
         if (!saved) return null;
 
         const draft = JSON.parse(saved) as Draft;
@@ -84,60 +84,22 @@ export function clearDraft(): void {
 }
 
 /**
- * 清除所有过期草稿
+ * 清除过期草稿
  */
 export function cleanupExpiredDrafts(): void {
-    const now = Date.now();
-    const keysToRemove: string[] = [];
-
-    // 遍历所有 localStorage 键
-    for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && key.startsWith(DRAFT_KEY_PREFIX)) {
-            try {
-                const saved = localStorage.getItem(key);
-                if (saved) {
-                    const draft = JSON.parse(saved) as Draft;
-                    if (now - draft.timestamp > DRAFT_EXPIRY) {
-                        keysToRemove.push(key);
-                    }
-                }
-            } catch {
-                // 解析失败，标记删除
-                keysToRemove.push(key);
-            }
-        }
+    const draft = loadDraft();
+    // loadDraft already handles expiry cleanup
+    if (!draft) {
+        clearDraft();
     }
-
-    // 删除过期草稿
-    keysToRemove.forEach(key => localStorage.removeItem(key));
 }
 
 /**
- * 获取所有草稿
+ * 获取当前草稿（如果存在）
  */
 export function getAllDrafts(): Draft[] {
-    const drafts: Draft[] = [];
-
-    for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && key.startsWith(DRAFT_KEY_PREFIX)) {
-            try {
-                const saved = localStorage.getItem(key);
-                if (saved) {
-                    const draft = JSON.parse(saved) as Draft;
-                    // 只返回未过期的草稿
-                    if (Date.now() - draft.timestamp <= DRAFT_EXPIRY) {
-                        drafts.push(draft);
-                    }
-                }
-            } catch {
-                // ignore
-            }
-        }
-    }
-
-    return drafts.sort((a, b) => b.timestamp - a.timestamp);
+    const draft = loadDraft();
+    return draft ? [draft] : [];
 }
 
 /**

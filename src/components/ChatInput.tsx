@@ -18,7 +18,7 @@ export function ChatInput() {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [isSending, setIsSending] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
-    const [previewMedia, setPreviewMedia] = useState<Array<{ type: 'image' | 'video'; url: string }>>([]);
+    const [previewMedia, setPreviewMedia] = useState<Array<{ type: 'image' | 'video'; url: string; width?: number; height?: number; placeholder?: string }>>([]);
     const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const isTypingRef = useRef(false);
     const attachLongPressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -72,29 +72,33 @@ export function ChatInput() {
     const parseMediaFiles = (text: string) => {
         const imgRegex = /\[img\](.*?)\[\/img\]/g;
         const videoRegex = /\[video\](.*?)\[\/video\]/g;
-        
+
         const media: Array<{ type: 'image' | 'video'; url: string; position: number }> = [];
-        
+
         // 收集所有图片
         let match;
         while ((match = imgRegex.exec(text)) !== null) {
             media.push({ type: 'image', url: match[1], position: match.index });
         }
-        
+
         // 收集所有视频
         while ((match = videoRegex.exec(text)) !== null) {
             media.push({ type: 'video', url: match[1], position: match.index });
         }
-        
+
         // 按出现顺序排序
         media.sort((a, b) => a.position - b.position);
-        
+
         setPreviewMedia(prev => {
-            if (prev.length === media.length && 
+            if (prev.length === media.length &&
                 prev.every((item, i) => item.type === media[i].type && item.url === media[i].url)) {
                 return prev;
             }
-            return media.map(({ type, url }) => ({ type, url }));
+            // 保留已有的尺寸信息
+            return media.map(({ type, url }) => {
+                const existing = prev.find(p => p.url === url);
+                return existing ? { ...existing, type, url } : { type, url };
+            });
         });
     };
 
@@ -107,10 +111,10 @@ export function ChatInput() {
         const media = previewMedia[index];
         if (!media) return;
 
-        const regex = media.type === 'image' 
-            ? /\[img\](.*?)\[\/img\]/g 
+        const regex = media.type === 'image'
+            ? /\[img\](.*?)\[\/img\]/g
             : /\[video\](.*?)\[\/video\]/g;
-        
+
         let matchIndex = 0;
         let currentMediaIndex = 0;
 
@@ -314,13 +318,26 @@ export function ChatInput() {
                 // Transform mentions first to ensure optimistic message matches server message
                 const transformedContent = await transformMentions(finalContent);
 
+                // 从预览媒体中获取图片尺寸信息 (使用上传返回的尺寸)
+                const imageMeta: Record<string, { width: number; height: number; blurhash?: string }> = {};
+                for (const media of previewMedia) {
+                    if (media.type === 'image' && media.width && media.height) {
+                        imageMeta[media.url] = {
+                            width: media.width,
+                            height: media.height,
+                            blurhash: media.placeholder
+                        };
+                    }
+                }
+
                 // 立即添加乐观消息
                 const user = userInfo.value;
                 const tempId = addOptimisticMessage(
                     transformedContent,
                     { id: user.id, nickname: user.nickname, avatar: user.avatar },
                     reply ? Number(reply.id) : undefined,
-                    reply ? { uid: Number(reply.uid), nickname: reply.user, avatar: reply.avatar, content: reply.text } : undefined
+                    reply ? { uid: Number(reply.uid), nickname: reply.user, avatar: reply.avatar, content: reply.text } : undefined,
+                    Object.keys(imageMeta).length > 0 ? imageMeta : undefined
                 );
 
                 // 清空输入框 (立即响应)
@@ -413,6 +430,18 @@ export function ChatInput() {
                     const value = textarea.value;
                     textarea.value = value.substring(0, start) + bbcode + value.substring(end);
                     textarea.selectionStart = textarea.selectionEnd = start + bbcode.length;
+
+                    // 如果是图片，先保存尺寸信息，然后触发 handleInput
+                    if (tag === 'img' && result.width && result.height) {
+                        setPreviewMedia(prev => [...prev, {
+                            type: 'image',
+                            url: result.url!,
+                            width: result.width,
+                            height: result.height,
+                            placeholder: result.placeholder
+                        }]);
+                    }
+
                     handleInput();
                 }
             } else {
@@ -530,7 +559,7 @@ export function ChatInput() {
                                         />
                                         <div class="video-play-overlay">
                                             <svg viewBox="0 0 24 24" width="24" height="24" fill="white">
-                                                <path d="M8 5v14l11-7z"/>
+                                                <path d="M8 5v14l11-7z" />
                                             </svg>
                                         </div>
                                     </>

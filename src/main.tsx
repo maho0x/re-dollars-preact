@@ -1,5 +1,6 @@
 import { render } from 'preact';
 import { App } from './App';
+import { initDollarsAPI } from './extensionAPI';
 import { settings } from './stores/user';
 import { toggleChat, isChatOpen } from './stores/chat';
 import cssContent from '@/styles/index.css?inline';
@@ -9,7 +10,7 @@ import photoViewCss from 'react-photo-view/dist/react-photo-view.css?inline';
 function injectStyles() {
     // 检查是否已注入
     if (document.querySelector('[data-dollars-styles]')) return;
-    
+
     const style = document.createElement('style');
     style.setAttribute('data-dollars-styles', '');
     style.textContent = cssContent + '\n' + photoViewCss;
@@ -20,7 +21,7 @@ function injectStyles() {
 function injectSVGFilters() {
     // 检查是否已注入
     if (document.querySelector('[data-dollars-svg-filters]')) return;
-    
+
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.setAttribute('data-dollars-svg-filters', '');
     svg.setAttribute('width', '0');
@@ -77,16 +78,19 @@ function init() {
     // 1. 先注入样式和 SVG（避免闪现）
     injectStyles();
     injectSVGFilters();
-    
-    // 2. 创建挂载点
+
+    // 2. 初始化扩展 API
+    initDollarsAPI();
+
+    // 3. 创建挂载点
     const container = document.createElement('div');
     container.id = 'dollars-app-mount';
     document.body.appendChild(container);
 
-    // 3. 渲染应用
+    // 4. 渲染应用
     render(<App />, container);
 
-    // 4. 注入首页卡片
+    // 5. 注入首页卡片
     setTimeout(injectHomeCard, 0);
 }
 

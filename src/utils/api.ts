@@ -210,6 +210,9 @@ export async function searchMessages(query: string, offset = 0, limit = 20): Pro
 export async function uploadFile(file: File): Promise<{
     status: boolean;
     url?: string;
+    width?: number;
+    height?: number;
+    placeholder?: string;
     error?: string;
 }> {
     const formData = new FormData();
@@ -452,40 +455,5 @@ export async function lookupUsersByName(usernames: string[]): Promise<Record<str
         return data.data || {};
     } catch (e) {
         return {};
-    }
-}
-
-/**
- * 更新已读状态
- */
-export async function updateReadStatus(lastReadId: number): Promise<void> {
-    try {
-        await fetch(`${BACKEND_URL}/api/messages/read`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                ...getAuthHeaders(),
-            },
-            credentials: 'include',
-            body: JSON.stringify({ last_read_id: lastReadId }),
-        });
-    } catch (e) {
-        // ignore
-    }
-}
-
-/**
- * 获取已读状态
- */
-export async function fetchReadStatus(): Promise<number> {
-    try {
-        const res = await fetch(`${BACKEND_URL}/api/messages/read`, {
-            headers: getAuthHeaders(),
-            credentials: 'include',
-        });
-        const data = await res.json();
-        return data.status ? data.last_read_id : 0;
-    } catch (e) {
-        return 0;
     }
 }

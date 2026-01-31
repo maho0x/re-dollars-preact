@@ -1,6 +1,7 @@
 import { signal, computed } from '@preact/signals';
 import { BACKEND_URL } from '@/utils/constants';
 import { historyNewestId, messageIds } from './chat';
+import { getAuthHeaders } from './user';
 
 // ===== Signals =====
 export const lastReadId = signal<number | null>(null);
@@ -27,20 +28,6 @@ export const unreadCount = computed(() => {
 function getUserId(): number | null {
     const uid = (window as any).CHOBITS_UID;
     return uid ? Number(uid) : null;
-}
-
-function getAuthHeaders(): Record<string, string> {
-    const headers: Record<string, string> = {};
-    // 从 cookie 中获取认证信息
-    const cookies = document.cookie.split(';');
-    for (const cookie of cookies) {
-        const [name] = cookie.trim().split('=');
-        if (name === 'chii_auth' || name === 'chii_sid') {
-            headers['Cookie'] = document.cookie;
-            break;
-        }
-    }
-    return headers;
 }
 
 // ===== API Functions =====

@@ -1167,6 +1167,14 @@ html[data-theme="dark"] .bubble-timestamp {
   display: none;
 }
 
+/* 但是编辑过的消息始终显示时间戳 */
+.chat-message.is-grouped-with-next.is-edited .bubble-timestamp {
+  display: block;
+  float: none;
+  margin: 4px 0 0 0;
+  text-align: right;
+}
+
 /* 贴纸模式下的时间戳样式 */
 .bubble.sticker-mode .bubble-timestamp {
   position: absolute;

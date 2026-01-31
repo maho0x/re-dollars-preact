@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'preact/hooks';
+import { useEffect, useCallback } from 'preact/hooks';
 import { WEBSOCKET_URL } from '@/utils/constants';
 import {
     wsConnected,
@@ -30,7 +30,6 @@ let ws: WebSocket | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 let connectionCheckTimer: ReturnType<typeof setInterval> | null = null;
-let isInitialConnection = true;
 let presenceSubscribed = new Set<string>();
 let syncPresenceTimer: ReturnType<typeof setTimeout> | null = null;
 let wsInitialized = false;
@@ -167,8 +166,6 @@ function connectWebSocket() {
         ws.close();
         ws = null;
     }
-
-    isInitialConnection = true;
     ws = new WebSocket(WEBSOCKET_URL);
 
     ws.onopen = () => {
@@ -197,20 +194,18 @@ function connectWebSocket() {
             sendMessage({ type: 'presence', open: true });
             setTimeout(syncPresenceSubscriptions, 0);
         }
-
-        isInitialConnection = false;
     };
 
     ws.onmessage = (event) => {
         try {
             const data = JSON.parse(event.data);
             handleWebSocketMessage(data);
-        } catch (e) {
+        } catch {
             // ignore
         }
     };
 
-    ws.onclose = (e) => {
+    ws.onclose = () => {
         wsConnected.value = false;
         stopHeartbeat();
 
@@ -299,11 +294,8 @@ function sendMessage(data: any) {
  * WebSocket hook (用于组件中获取连接状态和触发连接)
  */
 export function useWebSocket() {
-    const wsRef = useRef<WebSocket | null>(null);
-
     const connect = useCallback(() => {
         connectWebSocket();
-        wsRef.current = ws;
     }, []);
 
     const disconnect = useCallback(() => {
@@ -461,7 +453,7 @@ function handleWebSocketMessage(data: any) {
                 const normalizedMsg = normalizeMessage(msg);
                 if (!getMessageById(normalizedMsg.id)) {
                     addMessage(normalizedMsg);
-                    
+
                     // 如果是自己发送的消息，自动标记为已读
                     if (String(normalizedMsg.uid) === currentUserId) {
                         markSentMessageAsRead(normalizedMsg.id);

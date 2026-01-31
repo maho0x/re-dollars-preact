@@ -39,10 +39,10 @@ import { toggleSearch } from '@/stores/ui';
 import { blockedUsers } from '@/stores/user';
 import { inputAreaHeight } from '@/stores/ui';
 import { MessageItem } from './MessageItem';
-import { fetchHistoryMessages, fetchRecentMessages, fetchMessageContext, fetchNewerMessages, getUnreadCount } from '@/utils/api';
+import { fetchHistoryMessages, fetchRecentMessages, fetchMessageContext, fetchNewerMessages } from '@/utils/api';
 import { formatDate } from '@/utils/format';
 import { syncPresenceSubscriptions } from '@/hooks/useWebSocket';
-import { insertBrowseSeparator, insertUnreadSeparator } from '@/hooks/useStateKeeper';
+import { insertUnreadSeparator } from '@/hooks/useStateKeeper';
 
 // 配置常量
 const MAX_DOM_MESSAGES = 100;
@@ -56,6 +56,7 @@ export function ChatBody() {
     const isRestoringScroll = useRef(false);
     const hideDateLabelTimer = useRef<number | null>(null);
     const scrollAnimationRef = useRef<number | null>(null);
+    const isProgrammaticScroll = useRef(false); // 程序滚动标记，防止 ResizeObserver 干扰
 
     /**
      * 自定义平滑滚动函数 - 使用 easeOutExpo 缓动实现丝滑效果
@@ -115,7 +116,12 @@ export function ChatBody() {
         const targetTop = bodyRef.current.scrollHeight;
 
         if (smooth) {
+            isProgrammaticScroll.current = true;
             smoothScrollTo(targetTop);
+            // 动画结束后重置标记
+            setTimeout(() => {
+                isProgrammaticScroll.current = false;
+            }, 700);
         } else {
             bodyRef.current.scrollTop = targetTop;
         }
@@ -129,13 +135,12 @@ export function ChatBody() {
         const { scrollTop, scrollHeight, clientHeight } = bodyRef.current;
 
         // 检查是否在底部
-        // 检查是否在底部
-        const atBottom = scrollHeight - scrollTop - clientHeight < 100;
+        const atBottom = scrollHeight - scrollTop - clientHeight < 50;
         // 同步到全局信号 (供 WebSocket 使用)
         isAtBottom.value = atBottom;
 
-        // fix: 加载过程中不要更新吸附状态，防止加载更多历史时意外吸附到底部
-        if (!isLoadingRef.current) {
+        // 只有在非程序滚动和非加载中时更新吸附状态
+        if (!isProgrammaticScroll.current && !isLoadingRef.current) {
             isStickingToBottom.current = atBottom;
         }
 
@@ -302,17 +307,13 @@ export function ChatBody() {
     }, [manualScrollToBottom.value]);
 
     // 窗口打开时自动滚动到底部
-    // 注意：这个 effect 只处理窗口重新打开的情况（已有消息时）
-    // 初始加载由 loadInitialMessages 处理
+    // 注意：只有在实时模式下且吸附在底部时才执行
     useEffect(() => {
-        if (isChatOpen.value && messageIds.value.length > 0) {
-            // 使用双重 RAF 确保窗口已完全可见且布局已更新
-            // 第一个 RAF 等待 visibility 变化，第二个 RAF 等待布局计算
+        if (isChatOpen.value && messageIds.value.length > 0 && timelineIsLive.value && isStickingToBottom.current) {
             requestAnimationFrame(() => {
                 requestAnimationFrame(() => {
                     if (bodyRef.current) {
                         bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
-                        isStickingToBottom.current = true;
                     }
                 });
             });
@@ -530,14 +531,14 @@ export function ChatBody() {
     // 新消息到达时滚动
     useLayoutEffect(() => {
         if (pendingScrollToBottom.value) {
-            // 如果之前就在底部，或者正在执行滚动到底部的动画（防止连发消息打断滚动）
-            if (isStickingToBottom.current || scrollAnimationRef.current) {
-                // 使用 requestAnimationFrame 确保在 DOM 更新后执行
+            pendingScrollToBottom.value = false;
+
+            // 如果之前在底部吸附状态，则滚动到底部
+            if (isStickingToBottom.current) {
                 requestAnimationFrame(() => {
                     scrollToBottom(true);
                 });
             }
-            pendingScrollToBottom.value = false;
         }
     }, [pendingScrollToBottom.value, scrollToBottom]);
 
@@ -748,8 +749,8 @@ export function ChatBody() {
         if (!listEl) return;
 
         const observer = new ResizeObserver(() => {
-            // 只有在吸附状态下才自动滚动到底部
-            if (isStickingToBottom.current && bodyRef.current) {
+            // 只有在吸附状态下且不在程序滚动中时才自动滚动到底部
+            if (isStickingToBottom.current && !isProgrammaticScroll.current && bodyRef.current) {
                 bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
             }
         });

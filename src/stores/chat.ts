@@ -1,5 +1,5 @@
 import { signal, computed, batch } from '@preact/signals';
-import type { Message, Notification, Conversation } from '@/types';
+import type { Message, Conversation } from '@/types';
 import { MESSAGE_GROUP_TIME_GAP } from '@/utils/constants';
 
 // 导出新的已读状态和浏览位置管理模块
@@ -71,9 +71,6 @@ export const unreadJumpList = signal<number[]>([]);
 
 // 搜索
 export const searchQuery = signal('');
-export const searchOffset = signal(0);
-export const isSearching = signal(false);
-export const hasMoreSearchResults = signal(false);
 
 export const pendingMention = signal<{ uid: string; nickname: string } | null>(null);
 export const currentDateLabel = signal<string | null>(null);
@@ -89,11 +86,7 @@ export const onlineUsers = signal<Map<string, { name: string; avatar: string }>>
 export const onlineCount = signal(0);
 export const typingUsers = signal<Map<string, string>>(new Map());
 
-// 通知
-export const notifications = signal<Notification[]>([]);
 
-// 计算属性：提及消息数量
-export const mentionCount = computed(() => unreadJumpList.value.length);
 
 export function getMessageGrouping(msgId: number): { isSelf: boolean; isGrouped: boolean; isGroupedWithNext: boolean } {
     const map = messageMap.peek();
@@ -199,7 +192,13 @@ export function addMessage(msg: Message) {
  * 添加乐观消息 (发送前立即显示的临时消息)
  * @returns 临时消息 ID
  */
-export function addOptimisticMessage(content: string, user: { id: string; nickname: string; avatar: string }, replyToId?: number, replyDetails?: any): number {
+export function addOptimisticMessage(
+    content: string,
+    user: { id: string; nickname: string; avatar: string },
+    replyToId?: number,
+    replyDetails?: any,
+    imageMeta?: Record<string, { width: number; height: number }>
+): number {
     const tempId = nextOptimisticId--;
 
     const optimisticMsg: Message = {
@@ -211,6 +210,7 @@ export function addOptimisticMessage(content: string, user: { id: string; nickna
         timestamp: Math.floor(Date.now() / 1000),
         reply_to_id: replyToId,
         reply_details: replyDetails,
+        image_meta: imageMeta,
         stableKey: `temp-${Math.random().toString(36).slice(2)}`, // Generate stable key
     };
 

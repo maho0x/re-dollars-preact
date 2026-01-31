@@ -1,4 +1,12 @@
 /**
+ * 检测是否为移动设备
+ */
+export const isMobile = (): boolean => {
+    if (typeof window === 'undefined') return false;
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+};
+
+/**
  * HTML 转义
  */
 export const escapeHTML = (str: string): string =>

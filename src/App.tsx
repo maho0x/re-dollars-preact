@@ -9,7 +9,6 @@ import { integrateWithNativeSettingsPanel, applyAllSettings } from '@/utils/sett
 import { ContextMenu } from './components/ContextMenu';
 import { ProfileCard } from './components/ProfileCard';
 import { DockButton } from './components/DockButton';
-import { GlobalStyles, SVGFilters } from './components/GlobalStyles';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ImageViewer } from './components/ImageViewer';
 import { NotificationManager, loadNotifications } from './components/NotificationManager';
@@ -51,7 +50,7 @@ export function App() {
                     if (savedChatOpen !== null) {
                         isChatOpen.value = JSON.parse(savedChatOpen);
                     }
-                    
+
                     // 恢复最大化状态
                     const savedMaximized = localStorage.getItem('dollars.isMaximized');
                     if (savedMaximized !== null) {
@@ -110,8 +109,6 @@ export function App() {
 
     return (
         <div id="dollars-chat-root" data-bg-mode={settings.value.backgroundMode}>
-            <GlobalStyles />
-            <SVGFilters />
             <DockButton />
             <NotificationManager />
             {hasEverOpened.current && (
