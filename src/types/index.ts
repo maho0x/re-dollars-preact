@@ -28,6 +28,8 @@ export interface Message {
     edited_at?: number;
     /** Used for stable DOM key during optimistic message replacement */
     stableKey?: string;
+    /** Message sending state for optimistic updates */
+    state?: 'sending' | 'sent' | 'failed';
 }
 
 export interface ReplyDetails {

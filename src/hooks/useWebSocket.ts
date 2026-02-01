@@ -452,7 +452,9 @@ function handleWebSocketMessage(data: any) {
             for (const msg of filteredPayload) {
                 const normalizedMsg = normalizeMessage(msg);
                 if (!getMessageById(normalizedMsg.id)) {
-                    addMessage(normalizedMsg);
+                    // Pass tempId if server provided it (for optimistic message matching)
+                    const tempId = msg.tempId as string | undefined;
+                    addMessage(normalizedMsg, tempId);
 
                     // 如果是自己发送的消息，自动标记为已读
                     if (String(normalizedMsg.uid) === currentUserId) {
@@ -524,5 +526,16 @@ export function sendTypingStart() {
 export function sendTypingStop() {
     if (ws && ws.readyState === WebSocket.OPEN && settings.value.sharePresence) {
         sendMessage({ type: 'typing_stop' });
+    }
+}
+
+/**
+ * 发送待确认消息信息到后端（用于服务端匹配）
+ * @param tempId - 临时消息 ID (stableKey)
+ * @param content - 消息内容
+ */
+export function sendPendingMessage(tempId: string, content: string) {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        sendMessage({ type: 'pending_message', tempId, content });
     }
 }

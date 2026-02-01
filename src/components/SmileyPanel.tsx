@@ -22,11 +22,13 @@ export function SmileyPanel({ onSelect }: SmileyPanelProps) {
     const [isUploading, setIsUploading] = useState(false);
     const contentRef = useRef<HTMLDivElement>(null);
 
-    // 加载 BMO 表情从 LocalStorage
+    // 加载 BMO 表情 - 使用官方 API
     useEffect(() => {
         if (activeTab === 'BMO') {
             try {
-                const savedBmo = JSON.parse(localStorage.getItem('chii_saved_bmo') || '[]');
+                const bmoji = (window as any).Bmoji;
+                // 优先使用官方 API
+                const savedBmo = bmoji?.savedBmo?.list?.() || JSON.parse(localStorage.getItem('chii_saved_bmo') || '[]');
                 if (Array.isArray(savedBmo)) {
                     setBmoItems(savedBmo.filter((item: any) => item && item.code));
                 }
@@ -68,27 +70,24 @@ export function SmileyPanel({ onSelect }: SmileyPanelProps) {
         }
     }, [activeTab]);
 
-    // 对内容区域进行 Bmoji 渲染
+    // 对面板进行 Bmoji 渲染
     useEffect(() => {
-        if (activeTab === 'BMO' && (window as any).Bmoji && contentRef.current) {
-            // 延迟执行以确保 DOM 已更新
-            setTimeout(() => {
-                if (contentRef.current) {
-                    (window as any).Bmoji.renderAll(contentRef.current, { width: 21, height: 21 });
-                }
-            }, 0);
-        }
-    }, [activeTab, bmoItems]);
+        const bmoji = (window as any).Bmoji;
+        if (!bmoji || !isSmileyPanelOpen.value) return;
 
-    // 对 tabs 容器进行 Bmoji 渲染（如果存在）
-    useEffect(() => {
-        if ((window as any).Bmoji && isSmileyPanelOpen.value) {
+        // 使用 requestAnimationFrame 确保 DOM 已更新
+        requestAnimationFrame(() => {
+            // 渲染内容区域
+            if (activeTab === 'BMO' && contentRef.current) {
+                bmoji.renderAll(contentRef.current, { width: 21, height: 21 });
+            }
+            // 渲染 tabs 区域
             const tabsContainer = document.getElementById('dollars-smiles-tabs');
             if (tabsContainer) {
-                (window as any).Bmoji.renderAll(tabsContainer, { width: 21, height: 21 });
+                bmoji.renderAll(tabsContainer, { width: 21, height: 21 });
             }
-        }
-    }, [isSmileyPanelOpen.value]);
+        });
+    }, [isSmileyPanelOpen.value, activeTab, bmoItems]);
 
     const handleSelect = useCallback((code: string) => {
         if (onSelect) {

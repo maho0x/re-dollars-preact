@@ -3,7 +3,7 @@ import { replyingTo, editingMessage, cancelReplyOrEdit, addOptimisticMessage, re
 import { toggleSmileyPanel, inputAreaHeight, showImageViewer } from '@/stores/ui';
 import { userInfo, settings } from '@/stores/user';
 import { sendMessage as apiSendMessage, editMessage as apiEditMessage, uploadFile, lookupUsersByName } from '@/utils/api';
-import { sendTypingStart, sendTypingStop } from '@/hooks/useWebSocket';
+import { sendTypingStart, sendTypingStop, sendPendingMessage } from '@/hooks/useWebSocket';
 import { SVGIcons } from '@/utils/constants';
 import { escapeHTML, getAvatarUrl, debounce } from '@/utils/format';
 import { TypingIndicator } from './TypingIndicator';
@@ -214,13 +214,33 @@ export function ChatInput() {
     }, [pendingMention.value]);
 
     // Transform @username mentions to [user=uid]nickname[/user]
+    // Skips content inside [code] blocks
     const transformMentions = async (text: string) => {
+        // 提取 [code] 块，用占位符替换
+        const codeBlocks: string[] = [];
+        let processedText = text.replace(/\[code\]([\s\S]*?)\[\/code\]/gi, (match) => {
+            codeBlocks.push(match);
+            return `\x00CODE_BLOCK_${codeBlocks.length - 1}\x00`;
+        });
+
         const mentionRegex = /(^|\s)@([\p{L}\p{N}_']{1,30})/gu;
-        const matches = [...text.matchAll(mentionRegex)];
-        if (matches.length === 0) return text;
+        const matches = [...processedText.matchAll(mentionRegex)];
+        if (matches.length === 0) {
+            // 恢复 code 块
+            codeBlocks.forEach((block, i) => {
+                processedText = processedText.replace(`\x00CODE_BLOCK_${i}\x00`, block);
+            });
+            return processedText;
+        }
 
         const usernamesToLookup = [...new Set(matches.map(match => match[2]))].filter(u => u !== 'Bangumi娘');
-        if (usernamesToLookup.length === 0) return text;
+        if (usernamesToLookup.length === 0) {
+            // 恢复 code 块
+            codeBlocks.forEach((block, i) => {
+                processedText = processedText.replace(`\x00CODE_BLOCK_${i}\x00`, block);
+            });
+            return processedText;
+        }
 
         const userDataMap = await lookupUsersByName(usernamesToLookup);
         const replacementMap = new Map();
@@ -231,9 +251,16 @@ export function ChatInput() {
             }
         }
 
-        return text.replace(mentionRegex, (match, prefix, username) =>
+        processedText = processedText.replace(mentionRegex, (match, prefix, username) =>
             replacementMap.has(username) ? `${prefix}${replacementMap.get(username)}` : match
         );
+
+        // 恢复 code 块
+        codeBlocks.forEach((block, i) => {
+            processedText = processedText.replace(`\x00CODE_BLOCK_${i}\x00`, block);
+        });
+
+        return processedText;
     };
 
     // 加载草稿（初始化时）
@@ -332,13 +359,16 @@ export function ChatInput() {
 
                 // 立即添加乐观消息
                 const user = userInfo.value;
-                const tempId = addOptimisticMessage(
+                const { tempId, stableKey } = addOptimisticMessage(
                     transformedContent,
                     { id: user.id, nickname: user.nickname, avatar: user.avatar },
                     reply ? Number(reply.id) : undefined,
                     reply ? { uid: Number(reply.uid), nickname: reply.user, avatar: reply.avatar, content: reply.text } : undefined,
                     Object.keys(imageMeta).length > 0 ? imageMeta : undefined
                 );
+
+                // 通知后端有待确认消息（用于服务端匹配，替代内容比对）
+                sendPendingMessage(stableKey, transformedContent);
 
                 // 清空输入框 (立即响应)
                 textarea.value = '';

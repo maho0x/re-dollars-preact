@@ -49,9 +49,6 @@ function generatePreviewCardHTML(
         </a>`;
 }
 
-/**
- * 处理 BBCode
- */
 export function processBBCode(
     text: string,
     imageMeta: Record<string, { width?: number; height?: number; blurhash?: string; placeholder?: string }> = {},
@@ -65,8 +62,12 @@ export function processBBCode(
 ): string {
     let html = text;
 
-    // 代码块
-    html = html.replace(/\[code\]([\s\S]+?)\[\/code\]/gi, '<div class="codeHighlight"><pre>$1</pre></div>');
+    // 提取 [code] 块，用占位符替换，防止内部内容被解析
+    const codeBlocks: string[] = [];
+    html = html.replace(/\[code\]([\s\S]*?)\[\/code\]/gi, (_, content) => {
+        codeBlocks.push(content);
+        return `\x00CODE_BLOCK_${codeBlocks.length - 1}\x00`;
+    });
 
     // 话题标签
     html = html.replace(/(^|\s)(#[\p{L}\p{N}_]{1,50})(?=$|\s|[.,!?;:)])/gu, '$1<span class="chat-tag">$2</span>');
@@ -240,6 +241,11 @@ export function processBBCode(
 
     // 换行
     html = html.replace(/\n/g, '<br>');
+
+    // 恢复 code 块（内容需要 HTML 转义以防止 XSS）
+    codeBlocks.forEach((content, i) => {
+        html = html.replace(`\x00CODE_BLOCK_${i}\x00`, `<div class="codeHighlight"><pre>${escapeHTML(content)}</pre></div>`);
+    });
 
     return html;
 }

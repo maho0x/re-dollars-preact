@@ -215,19 +215,13 @@ export function ContextMenu() {
         const originalText = button.querySelector('span:not(.context-icon)')?.textContent || '收藏表情';
 
         if (contextMenuBmoCode.value) {
-            // Logic adapted from legacy script for BMO
+            // BMO 表情收藏（使用官方 API）
             const bmoCode = contextMenuBmoCode.value;
             try {
-                const key = 'chii_saved_bmo';
-                const saved = JSON.parse(localStorage.getItem(key) || '[]');
-
-                if (!saved.some((i: any) => i.code === bmoCode)) {
-                    saved.push({ code: bmoCode, name: bmoCode });
-                    localStorage.setItem(key, JSON.stringify(saved));
-
-                    // Refresh if panel is open/active? 
-                    // Legacy code refreshed the tab if it was 'BMO', but we don't have easy access to that here.
-
+                const bmoji = (window as any).Bmoji;
+                const existing = bmoji.savedBmo.list() || [];
+                if (!existing.some((i: any) => i.code === bmoCode)) {
+                    bmoji.savedBmo.create({ code: bmoCode, name: bmoCode });
                     const span = button.querySelector('span:not(.context-icon)');
                     if (span) span.textContent = '已存入BMO面板';
                 } else {

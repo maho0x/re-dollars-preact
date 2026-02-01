@@ -21,11 +21,13 @@ export function ReactionPickerFloating() {
     const contentRef = useRef<HTMLDivElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
 
-    // 加载 BMO 表情
+    // 加载 BMO 表情 - 使用官方 API
     useEffect(() => {
         if (activeTab === 'BMO') {
             try {
-                const savedBmo = JSON.parse(localStorage.getItem('chii_saved_bmo') || '[]');
+                const bmoji = (window as any).Bmoji;
+                // 优先使用官方 API
+                const savedBmo = bmoji?.savedBmo?.list?.() || JSON.parse(localStorage.getItem('chii_saved_bmo') || '[]');
                 if (Array.isArray(savedBmo)) {
                     setBmoItems(savedBmo.filter((item: any) => item && item.code));
                 }
@@ -37,13 +39,15 @@ export function ReactionPickerFloating() {
 
     // Bmoji 渲染
     useEffect(() => {
-        if (isReactionPickerOpen.value && (window as any).Bmoji && containerRef.current) {
-            setTimeout(() => {
-                if (containerRef.current) {
-                    (window as any).Bmoji.renderAll(containerRef.current, { width: 21, height: 21 });
-                }
-            }, 0);
-        }
+        const bmoji = (window as any).Bmoji;
+        if (!isReactionPickerOpen.value || !bmoji || !containerRef.current) return;
+
+        // 使用 requestAnimationFrame 确保 DOM 已更新
+        requestAnimationFrame(() => {
+            if (containerRef.current) {
+                bmoji.renderAll(containerRef.current, { width: 21, height: 21 });
+            }
+        });
     }, [isReactionPickerOpen.value, activeTab, bmoItems]);
 
     // 点击外部关闭

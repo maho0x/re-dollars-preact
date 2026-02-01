@@ -936,6 +936,54 @@ html[data-theme="dark"] .skeleton-shimmer::after {
   align-items: flex-end;
 }
 
+/* 待发送消息样式 */
+.chat-message.pending {
+  opacity: 0.7;
+}
+
+.chat-message.pending .bubble {
+  animation: pending-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pending-pulse {
+
+  0%,
+  100% {
+    opacity: 0.7;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+/* 发送失败消息样式 */
+.chat-message.failed {
+  opacity: 0.9;
+}
+
+.chat-message.failed .bubble {
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  position: relative;
+}
+
+.chat-message.failed .bubble::after {
+  content: "发送失败，点击重试";
+  position: absolute;
+  bottom: -18px;
+  right: 0;
+  font-size: 11px;
+  color: #ef4444;
+  opacity: 0;
+  transition: opacity 0.2s;
+  white-space: nowrap;
+}
+
+.chat-message.failed:hover .bubble::after,
+.chat-message.failed:active .bubble::after {
+  opacity: 1;
+}
+
 .chat-message.is-grouped-with-next {
   margin-bottom: 2px;
 }
@@ -3696,29 +3744,63 @@ html[data-theme="dark"] .mention-item.active {
 
 .chat-message.new-message {
   animation: dollars-message-in 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-  /* Disable transition during animation to prevent conflict */
-  transition: none !important;
+  /* Disable CSS transitions during keyframe animation to prevent conflict */
+  /* Note: NOT using !important so pending state can still apply properly */
+  transition: none;
   /* 确保动画从正确的初始状态开始 */
   opacity: 0;
   transform: translateY(16px);
 }
 
+/* When both pending and new-message are applied (optimistic message entry),
+   use pending's opacity so the spinner is visible during entry animation */
+.chat-message.pending.new-message {
+  opacity: 0.75;
+}
+
 /* Pending (Optimistic) Message */
 .chat-message.pending {
   opacity: 0.7;
+  /* Smooth transition when pending state is removed */
+  transition: opacity 0.25s ease-out !important;
 }
 
 .chat-message.pending .bubble::after {
   content: '';
   position: absolute;
-  right: 8px;
-  bottom: 8px;
-  width: 10px;
-  height: 10px;
+  right: 6px;
+  bottom: 4px;
+  width: 12px;
+  height: 12px;
   border: 2px solid var(--dollars-text-secondary);
   border-top-color: transparent;
   border-radius: 50%;
-  animation: dollars-spin 0.8s linear infinite;
+  animation: dollars-spin 0.7s ease-in-out infinite, dollars-spinner-fade-in 0.2s ease-out forwards;
+  will-change: transform;
+}
+
+/* Spinner rotation animation */
+@keyframes dollars-spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Spinner fade-in animation */
+@keyframes dollars-spinner-fade-in {
+  from {
+    opacity: 0;
+    transform: scale(0.5) rotate(0deg);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
 }
 
 /* Reaction Emoji Pop Animation */
@@ -3744,6 +3826,24 @@ html[data-theme="dark"] .mention-item.active {
 
 .reaction-item.just-added {
   animation: dollars-reaction-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* =========================================
+   Reaction Container Override
+   ========================================= */
+/* Override official .likes_grid opacity from 0.7 to 1 */
+#dollars-chat-root .likes_grid {
+  opacity: 1;
+}
+
+#dollars-chat-root .likes_grid .item {
+  gap: 3px;
+  background: rgba(255, 255, 255, 0.85);
+}
+
+/* Override dark mode .likes_grid .item background - official is too transparent */
+html[data-theme="dark"] #dollars-chat-root .likes_grid .item {
+  background: rgba(255, 255, 255, 0.15);
 }
 
 /* =========================================

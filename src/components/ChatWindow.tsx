@@ -17,7 +17,7 @@ interface ChatWindowProps {
 // 辅助函数：保存窗口位置和大小（仅在启用记忆状态时）
 function saveWindowPosition(element: HTMLDivElement) {
     if (!settings.value.rememberOpenState) return;
-    
+
     localStorage.setItem('dollarsChatPosition', JSON.stringify({
         x: element.offsetLeft,
         y: element.offsetTop,
@@ -266,29 +266,27 @@ export function ChatWindow({ skipEntryAnimation = false }: ChatWindowProps) {
         mobileChatViewActive.value && 'mobile-chat-active',
     ].filter(Boolean).join(' ');
 
-    // BMO 观察器 - 修复 BMO 表情渲染
+    // BMO 观察器 - 自动渲染新增的 .bmo 元素
     useEffect(() => {
-        if ((window as any).Bmoji) {
-            const list = windowRef.current?.querySelector('.chat-list');
-            if (list) {
-                // 原版逻辑：Bmoji.observe(getChatElements().list, { width: 21, height: 21 });
-                // 使用 setTimeout 确保 DOM 已渲染
-                setTimeout(() => {
-                    const bmoji = (window as any).Bmoji;
-                    if (typeof bmoji.observe === 'function') {
-                        bmoji.observe(list, { width: 21, height: 21 });
-                    }
-                }, 100);
+        const bmoji = (window as any).Bmoji;
+        const container = windowRef.current;
+        if (!bmoji || !container) return;
 
-                return () => {
-                    const bmoji = (window as any).Bmoji;
-                    if (bmoji && typeof bmoji.disconnect === 'function') {
-                        bmoji.disconnect();
-                    }
-                };
-            }
+        // 使用官方 observe API 自动处理新增的 .bmo 元素
+        if (typeof bmoji.observe === 'function') {
+            bmoji.observe(container, { width: 21, height: 21 });
         }
-    }, [windowRef.current]); // 依赖 windowRef
+        // 初始渲染已存在的元素
+        if (typeof bmoji.renderAll === 'function') {
+            bmoji.renderAll(container, { width: 21, height: 21 });
+        }
+
+        return () => {
+            if (typeof bmoji.disconnect === 'function') {
+                bmoji.disconnect();
+            }
+        };
+    }, []);
 
     return (
         <div

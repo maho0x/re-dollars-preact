@@ -77,8 +77,11 @@ export const currentDateLabel = signal<string | null>(null);
 export const showScrollBottomBtn = signal(false);
 export const newMessageIds = signal<Set<number>>(new Set());
 export const pendingJumpToMessage = signal<number | null>(null);
-export const pendingMessageIds = signal<Set<number>>(new Set());
 let nextOptimisticId = -1;
+
+// 待确认消息的超时定时器 (tempId -> timeoutId)
+const pendingTimeouts = new Map<number, ReturnType<typeof setTimeout>>();
+const PENDING_TIMEOUT_MS = 10000; // 10秒超时
 
 // WebSocket 状态
 export const wsConnected = signal(false);
@@ -135,34 +138,42 @@ export const isAtBottom = signal(true);
 
 /**
  * 添加单条消息 (通常由 WebSocket 新消息触发)
+ * @param msg - 消息对象
+ * @param tempId - 可选的临时 ID (stableKey)，由后端提供用于直接匹配乐观消息
  */
-export function addMessage(msg: Message) {
+export function addMessage(msg: Message, tempId?: string) {
     batch(() => {
         const map = new Map(messageMap.value);
         let replacedOptimistic = false;
         let inheritedStableKey: string | undefined;
+        let matchedTempId: number | undefined;
 
-        // 如果是自己发的消息，检查是否有对应的乐观消息需要替换
-        // 通过匹配消息内容来找到对应的乐观消息
-        const pendingIds = pendingMessageIds.peek();
-        if (pendingIds.size > 0) {
-            for (const pendingId of pendingIds) {
-                const pendingMsg = map.get(pendingId);
-                if (pendingMsg && pendingMsg.message === msg.message && pendingMsg.uid === msg.uid) {
-                    // 找到匹配的乐观消息，继承 stableKey 并删除旧消息
-                    inheritedStableKey = pendingMsg.stableKey;
-                    map.delete(pendingId);
-                    const newPendingIds = new Set(pendingIds);
-                    newPendingIds.delete(pendingId);
-                    pendingMessageIds.value = newPendingIds;
+        // 使用后端提供的 tempId 进行直接匹配
+        if (tempId) {
+            for (const [id, m] of map) {
+                if (m.state === 'sending' && m.stableKey === tempId) {
+                    inheritedStableKey = m.stableKey;
+                    matchedTempId = id;
+                    map.delete(id);
                     replacedOptimistic = true;
                     break;
                 }
             }
         }
 
-        // 将确认消息添加到 map，如果有 stableKey 则继承
-        const confirmedMsg = inheritedStableKey ? { ...msg, stableKey: inheritedStableKey } : msg;
+        // 清理超时定时器
+        if (matchedTempId !== undefined) {
+            const timeout = pendingTimeouts.get(matchedTempId);
+            if (timeout) {
+                clearTimeout(timeout);
+                pendingTimeouts.delete(matchedTempId);
+            }
+        }
+
+        // 将确认消息添加到 map，如果有 stableKey 则继承，标记为 sent
+        const confirmedMsg = inheritedStableKey
+            ? { ...msg, stableKey: inheritedStableKey, state: 'sent' as const }
+            : { ...msg, state: 'sent' as const };
         map.set(confirmedMsg.id, confirmedMsg);
         messageMap.value = map;
 
@@ -176,7 +187,6 @@ export function addMessage(msg: Message) {
             newIds.add(confirmedMsg.id);
             newMessageIds.value = newIds;
 
-            // 动画完成后移除
             setTimeout(() => {
                 const ids = new Set(newMessageIds.value);
                 ids.delete(confirmedMsg.id);
@@ -190,7 +200,7 @@ export function addMessage(msg: Message) {
 
 /**
  * 添加乐观消息 (发送前立即显示的临时消息)
- * @returns 临时消息 ID
+ * @returns 包含临时消息 ID 和 stableKey 的对象
  */
 export function addOptimisticMessage(
     content: string,
@@ -198,8 +208,9 @@ export function addOptimisticMessage(
     replyToId?: number,
     replyDetails?: any,
     imageMeta?: Record<string, { width: number; height: number }>
-): number {
+): { tempId: number; stableKey: string } {
     const tempId = nextOptimisticId--;
+    const stableKey = `temp-${Math.random().toString(36).slice(2)}`;
 
     const optimisticMsg: Message = {
         id: tempId,
@@ -211,7 +222,8 @@ export function addOptimisticMessage(
         reply_to_id: replyToId,
         reply_details: replyDetails,
         image_meta: imageMeta,
-        stableKey: `temp-${Math.random().toString(36).slice(2)}`, // Generate stable key
+        stableKey,
+        state: 'sending',
     };
 
     batch(() => {
@@ -222,11 +234,6 @@ export function addOptimisticMessage(
         const store = new Map(messageStore.value);
         store.set(String(tempId), { raw: content });
         messageStore.value = store;
-
-        // 标记为待发送
-        const pending = new Set(pendingMessageIds.value);
-        pending.add(tempId);
-        pendingMessageIds.value = pending;
 
         // 添加入场动画
         const newIds = new Set(newMessageIds.value);
@@ -239,16 +246,43 @@ export function addOptimisticMessage(
             newMessageIds.value = ids;
         }, 350);
 
-        pendingScrollToBottom.value = true;
+        // 强制滚动到底部（自己发送的消息）
+        manualScrollToBottom.value++;
     });
 
-    return tempId;
+    // 设置超时检测
+    const timeoutId = setTimeout(() => {
+        markMessageFailed(tempId);
+        pendingTimeouts.delete(tempId);
+    }, PENDING_TIMEOUT_MS);
+    pendingTimeouts.set(tempId, timeoutId);
+
+    return { tempId, stableKey };
+}
+
+/**
+ * 标记消息为发送失败
+ */
+export function markMessageFailed(tempId: number) {
+    const map = new Map(messageMap.value);
+    const msg = map.get(tempId);
+    if (msg && msg.state === 'sending') {
+        map.set(tempId, { ...msg, state: 'failed' });
+        messageMap.value = map;
+    }
 }
 
 /**
  * 移除乐观消息 (发送失败时调用)
  */
 export function removeOptimisticMessage(tempId: number) {
+    // 清理超时定时器
+    const timeout = pendingTimeouts.get(tempId);
+    if (timeout) {
+        clearTimeout(timeout);
+        pendingTimeouts.delete(tempId);
+    }
+
     batch(() => {
         const map = new Map(messageMap.value);
         map.delete(tempId);
@@ -257,11 +291,33 @@ export function removeOptimisticMessage(tempId: number) {
         const store = new Map(messageStore.value);
         store.delete(String(tempId));
         messageStore.value = store;
-
-        const pending = new Set(pendingMessageIds.value);
-        pending.delete(tempId);
-        pendingMessageIds.value = pending;
     });
+}
+
+/**
+ * 重试发送失败的消息
+ */
+export function retryMessage(tempId: number): { content: string; stableKey: string } | null {
+    const map = messageMap.value;
+    const msg = map.get(tempId);
+    if (!msg || msg.state !== 'failed') return null;
+
+    const content = msg.message;
+    const stableKey = msg.stableKey || `temp-${Math.random().toString(36).slice(2)}`;
+
+    // 更新状态为 sending
+    const newMap = new Map(map);
+    newMap.set(tempId, { ...msg, state: 'sending' });
+    messageMap.value = newMap;
+
+    // 重新设置超时检测
+    const timeoutId = setTimeout(() => {
+        markMessageFailed(tempId);
+        pendingTimeouts.delete(tempId);
+    }, PENDING_TIMEOUT_MS);
+    pendingTimeouts.set(tempId, timeoutId);
+
+    return { content, stableKey };
 }
 
 /**
