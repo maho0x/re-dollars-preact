@@ -5,6 +5,7 @@ import { searchQuery } from '@/stores/chat';
 import { searchMessages } from '@/utils/api';
 import { debounce, formatDate, getAvatarUrl } from '@/utils/format';
 import { SVGIcons } from '@/utils/constants';
+import { GalleryPanel } from './GalleryPanel';
 import type { Message } from '@/types';
 
 export function SearchPanel() {
@@ -14,6 +15,7 @@ export function SearchPanel() {
     const hasMore = useSignal(false);
     const searchOffset = useRef(0);
     const inputRef = useRef<HTMLInputElement>(null);
+    const isGalleryMode = useSignal(false);
 
     // 执行搜索
     const performSearch = useCallback(async (q: string, isNewSearch = false) => {
@@ -90,6 +92,12 @@ export function SearchPanel() {
         toggleSearch(false);
         searchQuery.value = '';
         results.value = [];
+        isGalleryMode.value = false;
+    };
+
+    // 切换相册模式
+    const toggleGalleryMode = () => {
+        isGalleryMode.value = !isGalleryMode.value;
     };
 
     // 点击结果
@@ -244,6 +252,14 @@ export function SearchPanel() {
                     title="按日期跳转"
                     dangerouslySetInnerHTML={{ __html: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon icon-tabler icons-tabler-outline icon-tabler-calendar"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M4 7a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2v-12" /><path d="M16 3v4" /><path d="M8 3v4" /><path d="M4 11h16" /><path d="M11 15h1" /><path d="M12 15v3" /></svg>` }}
                 />
+
+                {/* 相册模式按钮 */}
+                <div
+                    class={`search-gallery-btn ${isGalleryMode.value ? 'active' : ''}`}
+                    onClick={toggleGalleryMode}
+                    title="相册模式"
+                    dangerouslySetInnerHTML={{ __html: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M20.4 14.5L16 10 4 20"/></svg>` }}
+                />
             </div>
 
             {/* Hidden Date Input */}
@@ -254,40 +270,44 @@ export function SearchPanel() {
                 style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', width: 0, height: 0 }}
             />
 
-            <div id="dollars-search-results" onScroll={handleScroll}>
-                {results.value.map(msg => (
-                    <div
-                        key={msg.id}
-                        class="search-result-item"
-                        onClick={() => handleResultClick(msg)}
-                    >
-                        <img src={getAvatarUrl(msg.avatar, 's')} alt={msg.nickname} />
-                        <div class="dollars-search-content">
-                            <div class="dollars-search-header">
-                                <span class="dollars-search-nickname">{msg.nickname}</span>
-                                <span class="dollars-search-timestamp">
-                                    {formatDate(msg.timestamp, 'full')}
-                                </span>
-                            </div>
-                            <div class="dollars-search-message">
-                                {msg.message.replace(/\[.*?\]/g, ' ')}
+            {isGalleryMode.value ? (
+                <GalleryPanel onClose={() => isGalleryMode.value = false} />
+            ) : (
+                <div id="dollars-search-results" onScroll={handleScroll}>
+                    {results.value.map(msg => (
+                        <div
+                            key={msg.id}
+                            class="search-result-item"
+                            onClick={() => handleResultClick(msg)}
+                        >
+                            <img src={getAvatarUrl(msg.avatar, 's')} alt={msg.nickname} />
+                            <div class="dollars-search-content">
+                                <div class="dollars-search-header">
+                                    <span class="dollars-search-nickname">{msg.nickname}</span>
+                                    <span class="dollars-search-timestamp">
+                                        {formatDate(msg.timestamp, 'full')}
+                                    </span>
+                                </div>
+                                <div class="dollars-search-message">
+                                    {msg.message.replace(/\[.*?\]/g, ' ')}
+                                </div>
                             </div>
                         </div>
-                    </div>
-                ))}
+                    ))}
 
-                {isLoading.value && (
-                    <div style={{ textAlign: 'center', padding: '10px', color: '#999' }}>
-                        搜索中...
-                    </div>
-                )}
+                    {isLoading.value && (
+                        <div style={{ textAlign: 'center', padding: '10px', color: '#999' }}>
+                            搜索中...
+                        </div>
+                    )}
 
-                {!isLoading.value && results.value.length === 0 && searchQuery.value && (
-                    <div style={{ textAlign: 'center', padding: '20px', color: '#999' }}>
-                        未找到相关消息
-                    </div>
-                )}
-            </div>
+                    {!isLoading.value && results.value.length === 0 && searchQuery.value && (
+                        <div style={{ textAlign: 'center', padding: '20px', color: '#999' }}>
+                            未找到相关消息
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
     );
 }

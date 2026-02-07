@@ -205,6 +205,39 @@ export async function searchMessages(query: string, offset = 0, limit = 20): Pro
 }
 
 /**
+ * 获取相册媒体
+ */
+export async function fetchGalleryMedia(offset = 0, limit = 50): Promise<{
+    items: Array<{
+        url: string;
+        thumbnailUrl: string;
+        type: 'image' | 'video';
+        message_id: number;
+        timestamp: number;
+        uid: number;
+        nickname: string;
+        avatar: string;
+    }>;
+    hasMore: boolean;
+    total: number;
+}> {
+    const res = await fetch(
+        `${BACKEND_URL}/api/gallery?offset=${offset}&limit=${limit}`
+    );
+    const data = await res.json();
+
+    if (data.status) {
+        return {
+            items: data.items || [],
+            hasMore: data.hasMore || false,
+            total: data.total || 0,
+        };
+    }
+
+    return { items: [], hasMore: false, total: 0 };
+}
+
+/**
  * 上传文件
  */
 export async function uploadFile(file: File): Promise<{

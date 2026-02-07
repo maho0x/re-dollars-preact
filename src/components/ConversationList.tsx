@@ -1,6 +1,6 @@
 import { conversations, activeConversationId, setActiveConversation } from '@/stores/chat';
 import { isNarrowLayout, setMobileChatView } from '@/stores/ui';
-import { extensionConversations } from '@/stores/extensionConversations';
+import { extensionConversations, activeExtensionId, setActiveExtension } from '@/stores/extensionConversations';
 import { formatDate } from '@/utils/format';
 
 export function ConversationList({ searchTerm = '' }: { searchTerm?: string }) {
@@ -23,25 +23,37 @@ export function ConversationList({ searchTerm = '' }: { searchTerm?: string }) {
         }
     };
 
+    const handleExtensionClick = (item: typeof extensionItems[0]) => {
+        setActiveExtension(item.id);
+        item.onClick();
+        // 在 narrow 模式下，切换到聊天视图
+        if (isNarrowLayout.value) {
+            setMobileChatView(true);
+        }
+    };
+
     return (
         <div id="dollars-conversation-list">
             {/* 扩展项 (置于顶部) */}
-            {extensionItems.map(item => (
-                <div
-                    key={`ext-${item.id}`}
-                    class="conversation-item extension-item"
-                    onClick={item.onClick}
-                >
-                    <img src={item.avatar} class="avatar" alt={item.title} loading="lazy" />
-                    <div class="dollars-conv-content">
-                        <div class="dollars-conv-title">
-                            <span class="dollars-conv-nickname">{item.title}</span>
+            {extensionItems.map(item => {
+                const isActive = item.id === activeExtensionId.value;
+                return (
+                    <div
+                        key={`ext-${item.id}`}
+                        class={`conversation-item extension-item ${isActive ? 'active' : ''}`}
+                        onClick={() => handleExtensionClick(item)}
+                    >
+                        <img src={item.avatar} class="avatar" alt={item.title} loading="lazy" />
+                        <div class="dollars-conv-content">
+                            <div class="dollars-conv-title">
+                                <span class="dollars-conv-nickname">{item.title}</span>
+                            </div>
+                            {item.subtitle && <div class="dollars-conv-last-message">{item.subtitle}</div>}
                         </div>
-                        {item.subtitle && <div class="dollars-conv-last-message">{item.subtitle}</div>}
+                        {item.badge && <div class="unread-badge">{item.badge}</div>}
                     </div>
-                    {item.badge && <div class="unread-badge">{item.badge}</div>}
-                </div>
-            ))}
+                );
+            })}
             {/* 原有会话列表 */}
             {filteredConversations.map(conv => {
                 const isActive = conv.id === activeConversationId.value;

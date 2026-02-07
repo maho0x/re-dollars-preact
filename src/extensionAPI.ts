@@ -8,7 +8,7 @@ import { isChatOpen, toggleChat } from '@/stores/chat';
 import { showProfileCard } from '@/stores/ui';
 import { isLoggedIn, userInfo } from '@/stores/user';
 import type { UserInfo } from '@/types';
-import { extensionConversations, registerConversationItem, type ExtensionConversationItem } from '@/stores/extensionConversations';
+import { extensionConversations, registerConversationItem, updateConversationItem, type ExtensionConversationItem } from '@/stores/extensionConversations';
 
 // 导入 UI 组件
 import { UserAvatar } from '@/components/UserAvatar';
@@ -31,6 +31,7 @@ export interface ConversationItem {
     badge?: number | string;
     onClick: () => void;
     priority?: number;
+    statusLabel?: string;
 }
 
 /**
@@ -42,6 +43,7 @@ export interface DollarsAPIInterface {
     // 1. 会话列表扩展
     conversationList: {
         registerItem(item: ConversationItem): () => void;
+        updateItem(id: string, updates: Partial<ConversationItem>): void;
         getItems(): ConversationItem[];
     };
 
@@ -88,6 +90,9 @@ function createDollarsAPI(): DollarsAPIInterface {
         conversationList: {
             registerItem(item: ConversationItem): () => void {
                 return registerConversationItem(item as ExtensionConversationItem);
+            },
+            updateItem(id: string, updates: Partial<ConversationItem>): void {
+                updateConversationItem(id, updates as Partial<ExtensionConversationItem>);
             },
             getItems(): ConversationItem[] {
                 return [...extensionConversations.value];

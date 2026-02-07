@@ -5,12 +5,12 @@ import { userInfo, settings } from '@/stores/user';
 import { sendMessage as apiSendMessage, editMessage as apiEditMessage, uploadFile, lookupUsersByName } from '@/utils/api';
 import { sendTypingStart, sendTypingStop, sendPendingMessage } from '@/hooks/useWebSocket';
 import { SVGIcons } from '@/utils/constants';
-import { escapeHTML, getAvatarUrl, debounce } from '@/utils/format';
+import { escapeHTML, getAvatarUrl } from '@/utils/format';
 import { TypingIndicator } from './TypingIndicator';
 import { SmileyPanel } from './SmileyPanel';
 import { TextFormatter } from './TextFormatter';
 import { MentionCompleter } from './MentionCompleter';
-import { saveDraft, loadDraft, clearDraft, cleanupExpiredDrafts, type ReplyInfo } from '@/stores/drafts';
+import { saveDraft, loadDraft, clearDraft, cleanupExpiredDrafts, type ReplyInfo } from '@/stores/chat';
 
 export function ChatInput() {
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -192,7 +192,8 @@ export function ChatInput() {
         if (mention && textareaRef.current) {
             const { uid, nickname } = mention;
             const textarea = textareaRef.current;
-            const mentionText = `[user=${uid}]${nickname}[/user]`;
+            // For bot mention, use plain text format
+            const mentionText = uid === 'bot' ? `@${nickname}` : `[user=${uid}]${nickname}[/user]`;
             const start = textarea.selectionStart;
             const end = textarea.selectionEnd;
             const value = textarea.value;
@@ -443,6 +444,32 @@ export function ChatInput() {
 
     const handleFileUpload = async (file: File) => {
         setIsUploading(true);
+
+        // Pre-calculate image dimensions client-side (before upload)
+        let clientWidth = 0;
+        let clientHeight = 0;
+        if (file.type.startsWith('image/')) {
+            try {
+                const img = new Image();
+                const objectUrl = URL.createObjectURL(file);
+                await new Promise<void>((resolve) => {
+                    img.onload = () => {
+                        clientWidth = img.naturalWidth;
+                        clientHeight = img.naturalHeight;
+                        URL.revokeObjectURL(objectUrl);
+                        resolve();
+                    };
+                    img.onerror = () => {
+                        URL.revokeObjectURL(objectUrl);
+                        resolve();
+                    };
+                    img.src = objectUrl;
+                });
+            } catch (e) {
+                console.warn('Failed to get image dimensions:', e);
+            }
+        }
+
         try {
             const result = await uploadFile(file);
             if (result.status && result.url) {
@@ -461,13 +488,13 @@ export function ChatInput() {
                     textarea.value = value.substring(0, start) + bbcode + value.substring(end);
                     textarea.selectionStart = textarea.selectionEnd = start + bbcode.length;
 
-                    // 如果是图片，先保存尺寸信息，然后触发 handleInput
-                    if (tag === 'img' && result.width && result.height) {
+                    // Use client-side dimensions (more reliable than async backend)
+                    if (tag === 'img' && clientWidth && clientHeight) {
                         setPreviewMedia(prev => [...prev, {
                             type: 'image',
                             url: result.url!,
-                            width: result.width,
-                            height: result.height,
+                            width: clientWidth,
+                            height: clientHeight,
                             placeholder: result.placeholder
                         }]);
                     }

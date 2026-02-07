@@ -10,13 +10,20 @@ export interface ExtensionConversationItem {
     avatar: string;
     badge?: number | string;
     onClick: () => void;
+    onDeactivate?: () => void;  // 当扩展项被取消激活时调用(如关闭游戏)
     priority?: number;  // 排序优先级，越大越靠前
+    statusLabel?: string; // 自定义在线状态文本 (例如 "在画")
 }
 
 /**
  * 存储外部注册的会话项
  */
 export const extensionConversations = signal<ExtensionConversationItem[]>([]);
+
+/**
+ * 当前激活的扩展项 ID
+ */
+export const activeExtensionId = signal<string | null>(null);
 
 /**
  * 注册一个扩展会话项
@@ -42,8 +49,30 @@ export function registerConversationItem(item: ExtensionConversationItem): () =>
 }
 
 /**
- * 获取所有扩展会话项（已排序）
+ * 更新扩展会话项
+ */
+export function updateConversationItem(id: string, updates: Partial<ExtensionConversationItem>) {
+    extensionConversations.value = extensionConversations.value.map(item =>
+        item.id === id ? { ...item, ...updates } : item
+    );
+}
+
+/**
+ * 获取所有扩展会话项(已排序)
  */
 export function getExtensionConversations(): ExtensionConversationItem[] {
     return [...extensionConversations.value].sort((a, b) => (b.priority || 0) - (a.priority || 0));
+}
+
+/**
+ * 设置激活的扩展项
+ * 激活扩展项时,会清除普通会话的激活状态
+ */
+export function setActiveExtension(extensionId: string) {
+    activeExtensionId.value = extensionId;
+    // 清除普通会话的激活状态
+    // 使用动态导入避免循环依赖
+    import('./chat').then(({ activeConversationId }) => {
+        activeConversationId.value = '';
+    });
 }

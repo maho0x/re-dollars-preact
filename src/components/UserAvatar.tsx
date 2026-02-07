@@ -25,16 +25,20 @@ export function UserAvatar({ uid, src, nickname, className = '' }: UserAvatarPro
         }
         e.stopPropagation();
 
-        if (uid === 0) return;
-        showProfileCard(String(uid), e.target as HTMLElement);
+        // For uid=0 (bot), show profile card for uid 3605
+        const profileUid = (uid === 0 || String(uid) === '0') ? '3605' : String(uid);
+        showProfileCard(profileUid, e.target as HTMLElement);
     };
 
     const handleLongPress = (e: MouseEvent | TouchEvent) => {
         e.stopPropagation();
-        if (uid === 0) return;
 
-        // Trigger mention
-        pendingMention.value = { uid: String(uid), nickname };
+        // For uid=0 (bot), use special 'bot' uid for plain text mention
+        if (uid === 0 || String(uid) === '0') {
+            pendingMention.value = { uid: 'bot', nickname: 'Bangumi娘' };
+        } else {
+            pendingMention.value = { uid: String(uid), nickname };
+        }
 
         // Mobile vibration feedback
         if (navigator.vibrate) navigator.vibrate(50);

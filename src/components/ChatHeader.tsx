@@ -1,5 +1,6 @@
 import { onlineCount, conversations, activeConversationId, toggleChat } from '@/stores/chat';
 import { isMaximized, toggleMaximize, toggleSearch, isSearchActive, isNarrowLayout, mobileChatViewActive, setMobileChatView } from '@/stores/ui';
+import { activeExtensionId, extensionConversations } from '@/stores/extensionConversations';
 import { SVGIcons } from '@/utils/constants';
 import { openSettingsPanel } from '@/utils/settingsPanel';
 import type { Conversation } from '@/types';
@@ -27,16 +28,30 @@ export function ChatHeader() {
 
     // 获取当前会话信息
     const activeConv = conversations.value.find((c: Conversation) => c.id === activeConversationId.value);
+    const activeExtension = activeExtensionId.value
+        ? extensionConversations.value.find(e => e.id === activeExtensionId.value)
+        : null;
+
     const isShowingChatView = isNarrowLayout.value && mobileChatViewActive.value;
 
     // 动态标题
     let mainTitle = 'Re:Dollars';
     let avatarUrl = 'https://lsky.ry.mk/i/2025/09/06/68bc5540a8c51.webp';
     let showOnlineStatus = true;
+    let statusLabel = '在线';
 
     if (isNarrowLayout.value && !isShowingChatView) {
         mainTitle = '会话列表';
         showOnlineStatus = false;
+    } else if (activeExtension) {
+        mainTitle = activeExtension.title;
+        avatarUrl = activeExtension.avatar;
+        if (activeExtension.statusLabel) {
+            showOnlineStatus = true;
+            statusLabel = activeExtension.statusLabel;
+        } else {
+            showOnlineStatus = false;
+        }
     } else if (activeConv) {
         mainTitle = activeConv.type === 'channel' ? activeConv.title : activeConv.user?.nickname || activeConv.title;
         avatarUrl = activeConv.type === 'channel' ? activeConv.avatar : activeConv.user?.avatar || activeConv.avatar;
@@ -78,7 +93,7 @@ export function ChatHeader() {
                     {showOnlineStatus && (
                         <span class="online-status">
                             <span class="online-dot"></span>
-                            <span id="dollars-online-count">{onlineCount.value}</span> 在线
+                            <span id="dollars-online-count">{onlineCount.value}</span> {statusLabel}
                         </span>
                     )}
                 </div>

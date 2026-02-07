@@ -1,10 +1,192 @@
 import { signal, computed, batch } from '@preact/signals';
 import type { Message, Conversation } from '@/types';
-import { MESSAGE_GROUP_TIME_GAP } from '@/utils/constants';
+import { MESSAGE_GROUP_TIME_GAP, BACKEND_URL } from '@/utils/constants';
+import { getAuthHeaders } from './user';
 
-// 导出新的已读状态和浏览位置管理模块
-export * from './readState';
-export * from './browsePosition';
+// ============================================================================
+// Browse Position (formerly browsePosition.ts)
+// ============================================================================
+
+const BROWSE_POSITION_KEY = 'dollars_browse_position';
+
+export interface BrowsePosition {
+    anchorMessageId: number;
+    timestamp: number;
+}
+
+export const browsePosition = signal<BrowsePosition | null>(null);
+
+/**
+ * 保存浏览位置到 localStorage
+ */
+export function saveBrowsePosition(anchorMessageId: number): void {
+    const position: BrowsePosition = {
+        anchorMessageId,
+        timestamp: Date.now(),
+    };
+    browsePosition.value = position;
+    localStorage.setItem(BROWSE_POSITION_KEY, JSON.stringify(position));
+}
+
+/**
+ * 从 localStorage 加载浏览位置
+ */
+export function loadBrowsePosition(): BrowsePosition | null {
+    try {
+        const saved = localStorage.getItem(BROWSE_POSITION_KEY);
+        if (!saved) return null;
+
+        const position = JSON.parse(saved) as BrowsePosition;
+
+        // 检查是否过期 (24小时)
+        const MAX_AGE = 24 * 60 * 60 * 1000;
+        if (Date.now() - position.timestamp > MAX_AGE) {
+            clearBrowsePosition();
+            return null;
+        }
+
+        browsePosition.value = position;
+        return position;
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * 清除浏览位置
+ */
+export function clearBrowsePosition(): void {
+    browsePosition.value = null;
+    localStorage.removeItem(BROWSE_POSITION_KEY);
+}
+
+/**
+ * 判断是否应该恢复浏览位置
+ * @param unreadCount 当前未读消息数量
+ * @returns 是否应该恢复浏览位置（未读数 > 阈值）
+ */
+export function shouldRestoreBrowsePosition(unreadCount: number): boolean {
+    const THRESHOLD = 5;
+    return unreadCount > THRESHOLD;
+}
+
+// ============================================================================
+// Drafts (formerly drafts.ts)
+// ============================================================================
+
+const DRAFT_KEY_PREFIX = 'dollars_draft_';
+const DRAFT_EXPIRY = 7 * 24 * 60 * 60 * 1000; // 7 天过期
+
+export interface ReplyInfo {
+    id: string;
+    uid: string;
+    user: string;
+    avatar: string;
+    text: string;
+}
+
+export interface Draft {
+    content: string;
+    replyTo: ReplyInfo | null;
+    timestamp: number;
+}
+
+// 当前草稿 signal
+export const currentDraft = signal<Draft | null>(null);
+
+/**
+ * 获取草稿的 localStorage key
+ * 现在只使用一个主草稿键，因为回复信息也保存在草稿中
+ */
+function getDraftKey(): string {
+    return `${DRAFT_KEY_PREFIX}main`;
+}
+
+/**
+ * 保存草稿到 localStorage
+ */
+export function saveDraft(content: string, replyTo: ReplyInfo | null = null): void {
+    if (!content.trim() && !replyTo) {
+        // 内容为空且没有回复，删除草稿
+        clearDraft();
+        return;
+    }
+
+    const draft: Draft = {
+        content,
+        replyTo,
+        timestamp: Date.now(),
+    };
+
+    const key = getDraftKey();
+    localStorage.setItem(key, JSON.stringify(draft));
+    currentDraft.value = draft;
+}
+
+/**
+ * 从 localStorage 加载草稿
+ */
+export function loadDraft(): Draft | null {
+    try {
+        const key = getDraftKey();
+        const saved = localStorage.getItem(key);
+
+        if (!saved) return null;
+
+        const draft = JSON.parse(saved) as Draft;
+
+        // 检查是否过期
+        if (Date.now() - draft.timestamp > DRAFT_EXPIRY) {
+            clearDraft();
+            return null;
+        }
+
+        currentDraft.value = draft;
+        return draft;
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * 清除草稿
+ */
+export function clearDraft(): void {
+    const key = getDraftKey();
+    localStorage.removeItem(key);
+    currentDraft.value = null;
+}
+
+/**
+ * 清除过期草稿
+ */
+export function cleanupExpiredDrafts(): void {
+    const draft = loadDraft();
+    // loadDraft already handles expiry cleanup
+    if (!draft) {
+        clearDraft();
+    }
+}
+
+/**
+ * 获取当前草稿（如果存在）
+ */
+export function getAllDrafts(): Draft[] {
+    const draft = loadDraft();
+    return draft ? [draft] : [];
+}
+
+/**
+ * 检查是否有草稿
+ */
+export function hasDraft(): boolean {
+    const draft = loadDraft();
+    return draft !== null && (draft.content.trim().length > 0 || draft.replyTo !== null);
+}
+
+// ============================================================================
+// Core Chat State
+// ============================================================================
 
 // UI 状态
 export const scrollButtonMode = signal<'to-unread' | 'to-bottom'>('to-bottom');
@@ -22,7 +204,11 @@ export const messageIds = computed<number[]>(() => {
     return Array.from(map.keys()).sort((a, b) => {
         const msgA = map.get(a)!;
         const msgB = map.get(b)!;
-        return msgA.timestamp - msgB.timestamp || a - b;
+        if (msgA.timestamp !== msgB.timestamp) return msgA.timestamp - msgB.timestamp;
+        // Bot messages (uid=0) should come after user messages when timestamps are equal
+        if (msgA.uid === 0 && msgB.uid !== 0) return 1;
+        if (msgA.uid !== 0 && msgB.uid === 0) return -1;
+        return a - b;
     });
 });
 
@@ -89,7 +275,169 @@ export const onlineUsers = signal<Map<string, { name: string; avatar: string }>>
 export const onlineCount = signal(0);
 export const typingUsers = signal<Map<string, string>>(new Map());
 
+// ============================================================================
+// Read State (formerly readState.ts)
+// ============================================================================
 
+export const lastReadId = signal<number | null>(null);
+export const pendingReadId = signal<number | null>(null);
+export const isReadStateSyncing = signal<boolean>(false);
+
+export const hasUnreadMessages = computed(() => {
+    const readId = lastReadId.value;
+    if (!readId) return false;
+    const newestId = historyNewestId.value;
+    return newestId !== null && newestId > readId;
+});
+
+export const unreadCount = computed(() => {
+    const readId = lastReadId.value;
+    if (!readId) return 0;
+    const ids = messageIds.value;
+    return ids.filter(id => id > readId).length;
+});
+
+function getReadStateUserId(): number | null {
+    const uid = (window as any).CHOBITS_UID;
+    return uid ? Number(uid) : null;
+}
+
+/**
+ * 从后端加载已读状态
+ */
+export async function loadReadState(): Promise<number | null> {
+    try {
+        const userId = getReadStateUserId();
+        if (!userId) {
+            console.warn('Cannot load read state: user not logged in');
+            return null;
+        }
+
+        isReadStateSyncing.value = true;
+        const response = await fetch(`${BACKEND_URL}/api/messages/read?user_id=${userId}`, {
+            headers: getAuthHeaders(),
+            credentials: 'include',
+        });
+
+        if (!response.ok) return null;
+
+        const data = await response.json();
+        if (data.status && typeof data.last_read_id === 'number') {
+            // 取本地和远程的最大值
+            const remoteId = data.last_read_id;
+            const localId = lastReadId.value || 0;
+            const effectiveId = Math.max(remoteId, localId);
+            lastReadId.value = effectiveId;
+
+            // 如果本地值更大，推送到后端
+            if (localId > remoteId) {
+                syncReadStateToBackend(localId);
+            }
+
+            return effectiveId;
+        }
+        return null;
+    } catch (e) {
+        console.error('Failed to load read state:', e);
+        return null;
+    } finally {
+        isReadStateSyncing.value = false;
+    }
+}
+
+/**
+ * 更新已读状态 (只增不减)
+ */
+export function updateReadState(messageId: number): void {
+    const current = lastReadId.value;
+    if (current !== null && messageId <= current) return;
+
+    lastReadId.value = messageId;
+    pendingReadId.value = messageId;
+    debouncedSyncToBackend();
+}
+
+/**
+ * 防抖同步到后端 (500ms)
+ */
+let syncTimer: number | null = null;
+function debouncedSyncToBackend(): void {
+    if (syncTimer) clearTimeout(syncTimer);
+    syncTimer = window.setTimeout(() => {
+        const pending = pendingReadId.value;
+        if (pending !== null) {
+            syncReadStateToBackend(pending);
+            pendingReadId.value = null;
+        }
+    }, 500);
+}
+
+/**
+ * 同步已读状态到后端
+ */
+async function syncReadStateToBackend(messageId: number): Promise<void> {
+    try {
+        const userId = getReadStateUserId();
+        if (!userId) {
+            console.warn('Cannot sync read state: user not logged in');
+            return;
+        }
+
+        const response = await fetch(`${BACKEND_URL}/api/messages/read`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                ...getAuthHeaders(),
+            },
+            credentials: 'include',
+            body: JSON.stringify({ user_id: userId, last_read_id: messageId }),
+        });
+
+        if (!response.ok) {
+            // 网络错误时保留 pendingReadId，等待重试
+            pendingReadId.value = messageId;
+            return;
+        }
+
+        const data = await response.json();
+        // 后端返回实际生效的值 (可能因并发更高)
+        if (data.status && typeof data.effective_last_read_id === 'number') {
+            const effective = data.effective_last_read_id;
+            if (effective > (lastReadId.value || 0)) {
+                lastReadId.value = effective;
+            }
+        }
+    } catch (e) {
+        console.error('Failed to sync read state:', e);
+        // 网络错误时保留 pendingReadId，等待重试
+        pendingReadId.value = messageId;
+    }
+}
+
+/**
+ * 处理自己发送的消息
+ */
+export function markSentMessageAsRead(messageId: number): void {
+    updateReadState(messageId);
+}
+
+/**
+ * 获取第一条未读消息 ID
+ */
+export function getFirstUnreadId(): number | null {
+    const readId = lastReadId.value;
+    if (!readId) return null;
+
+    const ids = messageIds.peek();
+    for (const id of ids) {
+        if (id > readId) return id;
+    }
+    return null;
+}
+
+// ============================================================================
+// Message Grouping
+// ============================================================================
 
 export function getMessageGrouping(msgId: number): { isSelf: boolean; isGrouped: boolean; isGroupedWithNext: boolean } {
     const map = messageMap.peek();
@@ -489,6 +837,21 @@ export function cancelReplyOrEdit() {
 export function setActiveConversation(conversationId: string) {
     activeConversationId.value = conversationId;
     localStorage.setItem('dollars.activeConversationId', conversationId);
+
+    // 清除扩展项的激活状态并调用 onDeactivate 回调
+    // 使用动态导入避免循环依赖
+    import('./extensionConversations').then(({ activeExtensionId, extensionConversations }) => {
+        if (activeExtensionId.value !== null) {
+            // 找到当前激活的扩展项并调用其 onDeactivate
+            const activeExt = extensionConversations.value.find(
+                (item: { id: string }) => item.id === activeExtensionId.value
+            );
+            if (activeExt?.onDeactivate) {
+                activeExt.onDeactivate();
+            }
+            activeExtensionId.value = null;
+        }
+    });
 }
 
 /**
