@@ -10,7 +10,8 @@ import { UserProfilePanel } from './UserProfilePanel';
 import { FloatingUI } from './FloatingUI';
 import { Sidebar } from './Sidebar';
 import { useWebSocket } from '@/hooks/useWebSocket';
-import { loadWindowPosition, saveWindowPosition } from '@/utils/windowState';
+import { loadWindowPosition, saveWindowPosition, fitWindowRectToViewport } from '@/utils/windowState';
+import { MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT } from '@/utils/constants';
 import { onBmoReady } from '@/utils/bmo';
 
 const BMO_RENDER_OPTIONS = { width: 21, height: 21 };
@@ -129,11 +130,19 @@ export function ChatWindow({ skipEntryAnimation = false }: ChatWindowProps) {
 
         const saved = loadWindowPosition();
         if (saved && windowRef.current) {
-            const { x, y, width, height } = saved;
-            windowRef.current.style.left = `${x}px`;
-            windowRef.current.style.top = `${y}px`;
-            if (width) windowRef.current.style.width = `${width}px`;
-            if (height) windowRef.current.style.height = `${height}px`;
+            const el = windowRef.current;
+            // 保存的几何数据可能来自更大的屏幕/窗口；在应用前夹取到当前视口，
+            // 否则窗口可能出现在视口外或超出边界（表现为“打不开”或只显示一部分）。
+            const rect = fitWindowRectToViewport({
+                left: saved.x,
+                top: saved.y,
+                width: saved.width ?? el.offsetWidth,
+                height: saved.height ?? el.offsetHeight,
+            });
+            el.style.left = `${rect.left}px`;
+            el.style.top = `${rect.top}px`;
+            el.style.width = `${rect.width}px`;
+            el.style.height = `${rect.height}px`;
         }
     }, []);
 
@@ -148,29 +157,21 @@ export function ChatWindow({ skipEntryAnimation = false }: ChatWindowProps) {
                 rafId = 0;
                 if (!windowRef.current || isMobileViewport.value || isMaximized.value) return;
 
-                const rect = windowRef.current.getBoundingClientRect();
-                const width = rect.width;
-                const height = rect.height;
-                const maxLeft = Math.max(0, window.innerWidth - width);
-                const maxTop = Math.max(0, window.innerHeight - height);
+                const el = windowRef.current;
+                const rect = el.getBoundingClientRect();
+                // 同时夹取尺寸与位置：仅夹取位置不足以处理视口纵向缩小到比窗口更矮的
+                // 情况——此时 maxTop 为 0、top 已是 0，但窗口底边仍会溢出视口。
+                const fitted = fitWindowRectToViewport({
+                    left: rect.left,
+                    top: rect.top,
+                    width: rect.width,
+                    height: rect.height,
+                });
 
-                let newLeft = rect.left;
-                let newTop = rect.top;
-                let needsUpdate = false;
-
-                if (newLeft > maxLeft) {
-                    newLeft = maxLeft;
-                    needsUpdate = true;
-                }
-                if (newTop > maxTop) {
-                    newTop = maxTop;
-                    needsUpdate = true;
-                }
-
-                if (needsUpdate) {
-                    windowRef.current.style.left = `${newLeft}px`;
-                    windowRef.current.style.top = `${newTop}px`;
-                }
+                if (fitted.width !== rect.width) el.style.width = `${fitted.width}px`;
+                if (fitted.height !== rect.height) el.style.height = `${fitted.height}px`;
+                if (fitted.left !== rect.left) el.style.left = `${fitted.left}px`;
+                if (fitted.top !== rect.top) el.style.top = `${fitted.top}px`;
             });
         };
 
@@ -258,8 +259,8 @@ export function ChatWindow({ skipEntryAnimation = false }: ChatWindowProps) {
         const dy = resizeState.current.startY - y;
 
         // 计算新位置，确保不超出窗口边界
-        let newWidth = Math.max(280, resizeState.current.initialWidth + dx);
-        let newHeight = Math.max(200, resizeState.current.initialHeight + dy);
+        let newWidth = Math.max(MIN_WINDOW_WIDTH, resizeState.current.initialWidth + dx);
+        let newHeight = Math.max(MIN_WINDOW_HEIGHT, resizeState.current.initialHeight + dy);
         let newLeft = resizeState.current.initialLeft - (newWidth - resizeState.current.initialWidth);
         let newTop = resizeState.current.initialTop - (newHeight - resizeState.current.initialHeight);
 

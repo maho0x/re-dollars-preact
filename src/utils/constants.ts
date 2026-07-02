@@ -30,6 +30,10 @@ export const BGM_CALLBACK_URL = `${BACKEND_API_URL}/auth/callback`;
 // UI 常量
 export const MESSAGE_GROUP_TIME_GAP = 300;
 
+// 聊天窗口最小尺寸 (px)
+export const MIN_WINDOW_WIDTH = 280;
+export const MIN_WINDOW_HEIGHT = 200;
+
 // 时间常量 (ms)
 export const TYPING_STOP_DELAY = 2500;
 export const DRAFT_SAVE_DELAY = 1000;
