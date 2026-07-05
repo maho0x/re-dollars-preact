@@ -32,16 +32,17 @@ function rawCssModule(): import('rollup').Plugin {
     };
 }
 
+// 注意：以下 DOM hook 是外部用户脚本（如「用画画回复！」涂鸦脚本）依赖的公开集成点，
+// 必须保持稳定、不参与混淆，否则外部脚本会因找不到元素而失效：
+//   #dollars-chat-window, #dollars-search-btn, .header-btn, .chat-textarea（后者本就不在列表内）
 const internalClassTokens = [
     'dollars-chat-root',
-    'dollars-chat-window',
     'dollars-content-panes',
     'dollars-sidebar',
     'dollars-sidebar-search-container',
     'dollars-sidebar-search-input',
     'dollars-conversation-list',
     'dollars-main-chat',
-    'dollars-search-btn',
     'dollars-maximize-btn',
     'dollars-emoji-btn',
     'dollars-attach-btn',
@@ -63,7 +64,6 @@ const internalClassTokens = [
     'bubble-nickname',
     'text-content',
     'chat-header',
-    'header-btn',
     'close-btn',
     'chat-body',
     'chat-list',

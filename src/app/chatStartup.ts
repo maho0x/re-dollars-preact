@@ -1,6 +1,5 @@
 import { signal } from '@preact/signals';
 import { useEffect, useRef } from 'preact/hooks';
-import { loadNotifications } from '@/components/NotificationManager';
 import { initWebSocketClient } from '@/services/websocket/client';
 import { initFavorites } from '@/stores/favorites';
 import { isChatOpen } from '@/stores/chatState';
@@ -20,6 +19,7 @@ import { integrateWithNativeSettingsPanel, refreshNativeSettingsPanelAuthState, 
 import { loadWindowState } from '@/utils/windowState';
 import { startPmPolling } from '@/stores/bangumiPm';
 import { restoreActiveConversation } from '@/stores/conversations';
+import { loadDollarsNotifications } from '@/stores/notifications';
 
 // 标记设置是否已加载完成
 export const settingsLoaded = signal(false);
@@ -44,9 +44,9 @@ function startNotificationMode() {
     const notifType = settings.value.notificationType;
     if (notifType === 'detail') {
         initWebSocketClient();
-        loadNotifications();
+        void loadDollarsNotifications();
     } else if (notifType === 'simple') {
-        loadNotifications();
+        void loadDollarsNotifications();
     }
 }
 

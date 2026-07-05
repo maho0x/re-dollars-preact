@@ -6,22 +6,22 @@ import type {
     BangumiPmInboxPage,
     BangumiPmMessage,
 } from '@/types/pm';
-import {
-    renderAudioMarkup,
-    renderFileMarkup,
-    renderImageMarkup,
-    renderVideoMarkup,
-} from '@/utils/mediaMarkup';
 import { escapeHTML } from '@/utils/format';
-import { replaceInlineTokens } from '@/utils/inlineTokens';
-import { getSmileyClassName, renderInlineTokenHTML } from '@/utils/inlineRender';
+import { processBBCode } from '@/utils/bbcode';
 
 const FALLBACK_ORIGIN = 'https://bangumi.tv';
-const ALLOWED_TAGS = new Set([
-    'A', 'AUDIO', 'B', 'BLOCKQUOTE', 'BR', 'CODE', 'DEL', 'DIV', 'EM', 'I', 'IMG',
-    'LI', 'OL', 'P', 'PRE', 'S', 'SPAN', 'STRONG', 'U', 'UL', 'VIDEO',
-]);
+// 与 sanitizePmBody 阶段无关：pmPresentationText 复原 BBCode 时需要跳过这些危险标签，
+// 避免把 <script> 之类的文本内容混进渲染文本。
 const BLOCKED_TAGS = new Set(['IFRAME', 'MATH', 'OBJECT', 'SCRIPT', 'STYLE', 'SVG', 'TEMPLATE']);
+
+// Bangumi 会把行内格式 BBCode 渲染成带 style 的 <span>，这里按样式还原回对应的 BBCode，
+// 交给 processBBCode 走和 Dollars 主聊天一致的渲染。
+const STYLE_TO_BBCODE: Array<[RegExp, string]> = [
+    [/font-weight\s*:\s*(?:bold|bolder|[6-9]00)/i, 'b'],
+    [/font-style\s*:\s*italic/i, 'i'],
+    [/text-decoration[^;]*\bline-through\b/i, 's'],
+    [/text-decoration[^;]*\bunderline\b/i, 'u'],
+];
 
 export class BangumiPmParseError extends Error {}
 
@@ -62,76 +62,6 @@ function avatarFrom(element: Element | null, baseUrl: string) {
     return match ? safeResourceUrl(match[1], baseUrl) || '' : '';
 }
 
-function appendRenderedMarkup(target: Node, document: Document, markup: string) {
-    const template = document.createElement('template');
-    template.innerHTML = markup;
-    target.appendChild(template.content);
-}
-
-function appendPmImage(
-    target: Node,
-    document: Document,
-    src: string,
-    alt: string,
-    isSmiley: boolean
-) {
-    if (isSmiley) {
-        const image = document.createElement('img');
-        image.setAttribute('src', src);
-        image.setAttribute('loading', 'lazy');
-        image.setAttribute('decoding', 'async');
-        image.setAttribute('referrerpolicy', 'no-referrer');
-        image.setAttribute('alt', alt);
-        image.className = getSmileyClassName(alt, src, 'smile smiley');
-        target.appendChild(image);
-        return;
-    }
-
-    appendRenderedMarkup(target, document, renderImageMarkup(src, undefined, { loaded: true }));
-}
-
-function renderPmInlineText(value: string) {
-    return replaceInlineTokens(value, renderInlineTokenHTML, { renderText: escapeHTML });
-}
-
-function appendSanitizedInlineText(value: string, target: Node, document: Document) {
-    if (!value) return;
-    appendRenderedMarkup(target, document, renderPmInlineText(value));
-}
-
-function appendSanitizedText(value: string, target: Node, document: Document, baseUrl: string) {
-    const mediaPattern = /\[(img|audio|video)\]([\s\S]*?)\[\/\1\]|\[file=([^\]]*)\]([\s\S]*?)\[\/file\]/gi;
-    let cursor = 0;
-    let match: RegExpExecArray | null;
-
-    while ((match = mediaPattern.exec(value)) !== null) {
-        if (match.index > cursor) appendSanitizedInlineText(value.slice(cursor, match.index), target, document);
-        const type = match[1]?.toLowerCase();
-        const rawUrl = (type ? match[2] : match[4])?.trim() || '';
-        const url = safeResourceUrl(rawUrl, baseUrl);
-        if (!url) {
-            appendSanitizedInlineText(match[0], target, document);
-        } else if (type === 'img') {
-            appendPmImage(target, document, url, 'image', false);
-        } else if (type === 'audio' || type === 'video') {
-            appendRenderedMarkup(
-                target,
-                document,
-                type === 'audio' ? renderAudioMarkup(url) : renderVideoMarkup(url)
-            );
-        } else {
-            appendRenderedMarkup(
-                target,
-                document,
-                renderFileMarkup(url, match[3]?.trim() || '附件')
-            );
-        }
-        cursor = mediaPattern.lastIndex;
-    }
-
-    if (cursor < value.length) appendSanitizedInlineText(value.slice(cursor), target, document);
-}
-
 function parsePmTimestamp(value: string) {
     const match = value.match(/^(\d{4})-(\d{1,2})-(\d{1,2})\s+(\d{1,2}):(\d{2})/);
     if (!match) return null;
@@ -146,112 +76,86 @@ function parsePmTimestamp(value: string) {
     return Number.isFinite(timestamp) ? timestamp : null;
 }
 
-function pmPresentationText(source: Node): string {
+function wrapBBCode(tag: string, content: string) {
+    return content ? `[${tag}]${content}[/${tag}]` : '';
+}
+
+function mediaUrl(element: Element, baseUrl: string) {
+    const raw = element.getAttribute('src')
+        || element.querySelector('source')?.getAttribute('src')
+        || '';
+    return safeResourceUrl(raw, baseUrl);
+}
+
+function presentSpan(element: Element, content: string): string {
+    if (!content) return content;
+    if (element.classList.contains('text_mask') || element.classList.contains('mask')) {
+        return wrapBBCode('mask', content);
+    }
+    const style = element.getAttribute('style') || '';
+    for (const [pattern, tag] of STYLE_TO_BBCODE) {
+        if (pattern.test(style)) return wrapBBCode(tag, content);
+    }
+    return content;
+}
+
+// 把 Bangumi 短信正文的 DOM 复原成 Dollars 风格的 BBCode 文本，
+// 再交由 processBBCode 渲染，从而与主聊天保持完全一致（[code]、加粗、引用等）。
+function pmPresentationText(source: Node, baseUrl: string): string {
     if (source.nodeType === Node.TEXT_NODE) return source.textContent || '';
     if (!(source instanceof Element)) return '';
+    if (BLOCKED_TAGS.has(source.tagName)) return '';
 
-    const content = Array.from(source.childNodes).map(pmPresentationText).join('');
+    const content = Array.from(source.childNodes).map(node => pmPresentationText(node, baseUrl)).join('');
     switch (source.tagName) {
         case 'BR':
             return '\n';
-        case 'IMG':
-            return source.classList.contains('smile')
-                ? source.getAttribute('alt') || ''
-                : `[img]${source.getAttribute('src') || 'image'}[/img]`;
+        case 'IMG': {
+            if (source.classList.contains('smile')) return source.getAttribute('alt') || '';
+            const src = safeResourceUrl(source.getAttribute('src') || '', baseUrl);
+            return src ? `[img]${src}[/img]` : '';
+        }
         case 'BLOCKQUOTE':
-            return `[quote]${content}[/quote]`;
+            return wrapBBCode('quote', content);
         case 'PRE':
-            return `[code]${source.textContent || ''}[/code]`;
+            return wrapBBCode('code', source.textContent || '');
         case 'CODE':
-            return source.parentElement?.tagName === 'PRE' ? content : `[code]${content}[/code]`;
-        case 'VIDEO':
-            return `[video]${source.getAttribute('src') || content}[/video]`;
-        case 'AUDIO':
-            return `[audio]${source.getAttribute('src') || content}[/audio]`;
+            return source.parentElement?.tagName === 'PRE' ? content : wrapBBCode('code', content);
+        case 'VIDEO': {
+            const src = mediaUrl(source, baseUrl);
+            return src ? `[video]${src}[/video]` : '';
+        }
+        case 'AUDIO': {
+            const src = mediaUrl(source, baseUrl);
+            return src ? `[audio]${src}[/audio]` : '';
+        }
+        case 'A': {
+            const href = safeResourceUrl(source.getAttribute('href') || '', baseUrl);
+            if (!href) return content;
+            // 裸链接交给 processBBCode 的自动链接逻辑，与主聊天一致
+            return content.trim() === href ? href : `[url=${href}]${content}[/url]`;
+        }
+        case 'B':
+        case 'STRONG':
+            return wrapBBCode('b', content);
+        case 'I':
+        case 'EM':
+            return wrapBBCode('i', content);
+        case 'U':
+            return wrapBBCode('u', content);
+        case 'S':
+        case 'DEL':
+        case 'STRIKE':
+            return wrapBBCode('s', content);
+        case 'SPAN':
+            return presentSpan(source, content);
         default:
             return content;
     }
 }
 
-function appendSanitizedNode(
-    source: Node,
-    target: Node,
-    document: Document,
-    baseUrl: string,
-    parseMediaText = true
-) {
-    if (source.nodeType === Node.TEXT_NODE) {
-        const value = source.textContent || '';
-        if (parseMediaText) appendSanitizedText(value, target, document, baseUrl);
-        else target.appendChild(document.createTextNode(value));
-        return;
-    }
-    if (!(source instanceof Element)) return;
-
-    if (BLOCKED_TAGS.has(source.tagName)) return;
-
-    if (!ALLOWED_TAGS.has(source.tagName)) {
-        for (const child of Array.from(source.childNodes)) {
-            appendSanitizedNode(child, target, document, baseUrl, parseMediaText);
-        }
-        return;
-    }
-
-    if (source.tagName === 'IMG') {
-        const src = safeResourceUrl(source.getAttribute('src') || '', baseUrl);
-        if (src) appendPmImage(
-            target,
-            document,
-            src,
-            source.getAttribute('alt') || '',
-            source.classList.contains('smile')
-        );
-        return;
-    }
-
-    if (source.tagName === 'AUDIO' || source.tagName === 'VIDEO') {
-        const srcValue = source.getAttribute('src')
-            || source.querySelector('source')?.getAttribute('src')
-            || '';
-        const src = safeResourceUrl(srcValue, baseUrl);
-        if (src) appendRenderedMarkup(
-            target,
-            document,
-            source.tagName === 'AUDIO' ? renderAudioMarkup(src) : renderVideoMarkup(src)
-        );
-        return;
-    }
-
-    const element = document.createElement(source.tagName.toLowerCase());
-    if (source.tagName === 'A') {
-        const href = safeResourceUrl(source.getAttribute('href') || '', baseUrl);
-        if (href) {
-            element.setAttribute('href', href);
-            element.setAttribute('target', '_blank');
-            element.setAttribute('rel', 'noopener noreferrer');
-        }
-        if (source.hasAttribute('download') || source.classList.contains('chat-file-link')) {
-            element.className = 'chat-file-link';
-            const filename = source.getAttribute('download') || source.textContent?.trim() || '附件';
-            element.setAttribute('download', filename);
-        }
-        const title = source.getAttribute('title');
-        if (title) element.setAttribute('title', title);
-    }
-
-    const parseChildMedia = parseMediaText && source.tagName !== 'CODE' && source.tagName !== 'PRE';
-    for (const child of Array.from(source.childNodes)) {
-        appendSanitizedNode(child, element, document, baseUrl, parseChildMedia);
-    }
-    target.appendChild(element);
-}
-
-export function sanitizePmBody(source: Element, baseUrl: string) {
-    const container = source.ownerDocument.createElement('div');
-    for (const child of Array.from(source.childNodes)) {
-        appendSanitizedNode(child, container, source.ownerDocument, baseUrl);
-    }
-    return container.innerHTML;
+function renderPmBody(presentationText: string): string {
+    return processBBCode(escapeHTML(presentationText), {}, {}, {});
 }
 
 function extractForm(form: HTMLFormElement, baseUrl: string): BangumiPmForm {
@@ -340,14 +244,15 @@ export function parsePmConversation(html: string, baseUrl: string): BangumiPmCon
         const userLink = child.querySelector<HTMLAnchorElement>('a[href*="/user/"]');
         const info = child.querySelector('.pm-message-info small')?.textContent || '';
         const timestampText = info.split('/')[0]?.trim() || '';
+        const presentationText = Array.from(body.childNodes).map(node => pmPresentationText(node, baseUrl)).join('').trim();
         messages.push({
             id: messageId,
             isSelf: child.classList.contains('pm-message-self'),
             avatar: avatarFrom(child, baseUrl),
             userHref: userLink ? new URL(userLink.href, baseUrl).pathname : '',
-            bodyHtml: sanitizePmBody(body, baseUrl),
+            bodyHtml: renderPmBody(presentationText),
             bodyText: body.textContent?.trim() || '',
-            presentationText: Array.from(body.childNodes).map(pmPresentationText).join('').trim(),
+            presentationText,
             timestamp: parsePmTimestamp(timestampText),
             timestampText,
             topic,

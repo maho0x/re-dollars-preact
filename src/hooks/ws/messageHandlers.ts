@@ -17,7 +17,7 @@ import {
 } from '@/stores/chatState';
 import { markSentMessageAsRead } from '@/stores/readState';
 import { userInfo, blockedUsers } from '@/stores/user';
-import { addNotification, markMessageAsSeenIfNotified } from '@/components/NotificationManager';
+import { addDollarsNotification, markMessageAsSeenIfNotified } from '@/stores/notifications';
 import { getUnreadCount, fetchNewerMessages } from '@/utils/api/messages';
 import { lastReadId } from '@/stores/readState';
 
@@ -98,7 +98,7 @@ export function handleNewPM(data: any) {
  */
 export function handleNotification(data: any) {
     const n = data.payload;
-    addNotification(n);
+    addDollarsNotification(n);
 
     if (isChatOpen.value && unreadWhileScrolled.value === 0) {
         const mid = Number(n.message_id || n.message?.id);

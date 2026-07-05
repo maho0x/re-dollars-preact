@@ -1,5 +1,4 @@
 import { useRef, useCallback, useEffect, useState } from 'preact/hooks';
-import { render, type ComponentChildren } from 'preact';
 import {
     replyingTo,
     editingMessage,
@@ -22,6 +21,7 @@ import { SmileyPanel } from './SmileyPanel';
 import { TextFormatter } from './TextFormatter';
 import { MentionCompleter } from './MentionCompleter';
 import { MediaPreview } from './MediaPreview';
+import { FloatingPortal } from './FloatingPortal';
 import { MEDIA_FILE_ACCEPT, useMediaUpload } from '@/hooks/useMediaUpload';
 import {
     extractRichInputText,
@@ -44,35 +44,6 @@ type AttachMenuPosition = {
     left: number;
     bottom: number;
 };
-
-function FloatingPortal({ children }: { children: ComponentChildren }) {
-    const hostRef = useRef<HTMLDivElement | null>(null);
-
-    if (!hostRef.current) {
-        hostRef.current = document.createElement('div');
-    }
-
-    useEffect(() => {
-        const host = hostRef.current;
-        if (!host) return;
-
-        const root = document.getElementById('dollars-chat-root') ?? document.body;
-        root.appendChild(host);
-        return () => {
-            render(null, host);
-            host.remove();
-        };
-    }, []);
-
-    useEffect(() => {
-        const host = hostRef.current;
-        if (host) {
-            render(<>{children}</>, host);
-        }
-    }, [children]);
-
-    return null;
-}
 
 export function ChatInput() {
     const editorRef = useRef<HTMLDivElement>(null);

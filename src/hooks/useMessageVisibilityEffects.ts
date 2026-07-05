@@ -1,6 +1,6 @@
 import { useEffect } from 'preact/hooks';
 import type { RefObject } from 'preact';
-import { markMessageAsSeenIfNotified } from '@/components/NotificationManager';
+import { markMessageAsSeenIfNotified } from '@/stores/notifications';
 
 function updateContainerSize(container: HTMLElement, w: number, h: number) {
     const MAX_W = 320;

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 import { MEDIA_FILE_ACCEPT, useMediaUpload } from '@/hooks/useMediaUpload';
 import { useCollapsibleMessage } from '@/hooks/useCollapsibleMessage';
 import { useMessageImageViewer } from '@/hooks/useMessageImageViewer';
+import { useRichInput } from '@/hooks/useRichInput';
 import { activeConversationId } from '@/stores/conversations';
 import {
     activePmId,
@@ -27,13 +28,21 @@ import {
     hasRichBubbleContent,
     isStickerMessage,
 } from '@/utils/messagePresentation';
-import type { RichInputController, RichInputValueOptions } from '@/utils/richInput';
+import type { RichInputController } from '@/utils/richInput';
 import type { BangumiPmMessage } from '@/types/pm';
 import { MediaPreview } from './MediaPreview';
 import { FloatingDateCapsule } from './FloatingDateCapsule';
 import { SmileyPanel } from './SmileyPanel';
+import { TextFormatter } from './TextFormatter';
+import { FloatingPortal } from './FloatingPortal';
 
 const MAX_INPUT_HEIGHT = 150;
+const ATTACH_MENU_WIDTH = 176;
+
+type AttachMenuPosition = {
+    left: number;
+    bottom: number;
+};
 
 function arePmMessagesGrouped(current: BangumiPmMessage | undefined, adjacent: BangumiPmMessage | undefined) {
     return canGroupAdjacentMessages(
@@ -218,17 +227,19 @@ function PmConversationView({ id }: { id: string }) {
         replyForm: null,
     };
     const isInitialLoading = !detail && (pmDetailLoading.value || !pmDetailError.value);
-    const [body, setBody] = useState('');
     const [sending, setSending] = useState(false);
     const [sendError, setSendError] = useState('');
     const [isAttachMenuOpen, setIsAttachMenuOpen] = useState(false);
+    const [isAttachMenuClosing, setIsAttachMenuClosing] = useState(false);
+    const [attachMenuPosition, setAttachMenuPosition] = useState<AttachMenuPosition | null>(null);
     const listRef = useRef<HTMLDivElement>(null);
-    const composerRef = useRef<HTMLTextAreaElement>(null);
+    const composerRef = useRef<HTMLDivElement>(null);
+    const composerProxyRef = useRef<HTMLTextAreaElement>(null);
     const inputControllerRef = useRef<RichInputController | null>(null);
-    const bodyRef = useRef('');
-    const selectionRef = useRef({ start: 0, end: 0 });
+    const inputContainerRef = useRef<HTMLDivElement>(null);
     const attachButtonRef = useRef<HTMLButtonElement>(null);
     const attachMenuRef = useRef<HTMLDivElement>(null);
+    const attachCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const previousLastId = useRef('');
     const {
         fileInputRef,
@@ -247,58 +258,27 @@ function PmConversationView({ id }: { id: string }) {
         scopeSelector: '.dollars-pm-message-scroll',
     });
 
-    const resizeComposer = useCallback(() => {
-        const textarea = composerRef.current;
-        if (!textarea) return;
-        textarea.style.height = '38px';
-        textarea.style.height = `${Math.min(textarea.scrollHeight, MAX_INPUT_HEIGHT)}px`;
-        textarea.style.overflowY = textarea.scrollHeight > MAX_INPUT_HEIGHT ? 'auto' : 'hidden';
-    }, []);
+    // 与 Dollars 主聊天共用的富文本编辑器：实时把表情/贴纸渲染成图片
+    const { handleInput, handleCompositionStart, handleCompositionEnd } = useRichInput({
+        editorRef: composerRef,
+        proxyRef: composerProxyRef,
+        controllerRef: inputControllerRef,
+        maxHeight: MAX_INPUT_HEIGHT,
+        onValueChange: (value, options) => parseMediaFiles(value, options.knownMeta),
+    });
 
-    const applyBody = useCallback((value: string, options: RichInputValueOptions = {}) => {
-        const selection = options.selection || { start: value.length, end: value.length };
-        bodyRef.current = value;
-        selectionRef.current = selection;
-        setBody(value);
-        parseMediaFiles(value, options.knownMeta);
-        requestAnimationFrame(() => {
-            resizeComposer();
-            if (options.focus) composerRef.current?.focus();
-            composerRef.current?.setSelectionRange(selection.start, selection.end);
-        });
-    }, [parseMediaFiles, resizeComposer]);
+    const canCompose = !!detail?.replyForm;
 
-    inputControllerRef.current = {
-        focus: () => composerRef.current?.focus(),
-        getSelection: () => {
-            const textarea = composerRef.current;
-            if (textarea) {
-                selectionRef.current = {
-                    start: textarea.selectionStart,
-                    end: textarea.selectionEnd,
-                };
-            }
-            return selectionRef.current;
-        },
-        getValue: () => bodyRef.current,
-        insertText: (text, options = {}) => {
-            const selection = inputControllerRef.current?.getSelection() || selectionRef.current;
-            inputControllerRef.current?.replaceRange(text, selection.start, selection.end, options);
-        },
-        replaceRange: (text, start, end, options = {}) => {
-            const value = bodyRef.current;
-            const nextValue = value.substring(0, start) + text + value.substring(end);
-            const selection = options.selection || {
-                start: start + text.length,
-                end: start + text.length,
-            };
-            applyBody(nextValue, { ...options, selection });
-        },
-        setSelection: (start, end = start) => {
-            selectionRef.current = { start, end };
-            composerRef.current?.setSelectionRange(start, end);
-        },
-        setValue: applyBody,
+    const handleEditorKeyDown = (event: KeyboardEvent) => {
+        if (event.key !== 'Enter' || event.isComposing || event.keyCode === 229) return;
+        const modifier = event.ctrlKey || event.metaKey;
+        const shouldSend = settings.value.sendShortcut === 'Enter' ? !modifier : modifier;
+        event.preventDefault();
+        if (shouldSend) {
+            void send();
+        } else {
+            inputControllerRef.current?.insertText('\n', { focus: true });
+        }
     };
 
     useEffect(() => {
@@ -315,26 +295,88 @@ function PmConversationView({ id }: { id: string }) {
         previousLastId.current = lastId;
     }, [detail?.messages]);
 
+    const updateAttachMenuPosition = useCallback(() => {
+        const container = inputContainerRef.current;
+        if (!container) return;
+
+        const containerRect = container.getBoundingClientRect();
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+        const left = Math.min(
+            viewportWidth - ATTACH_MENU_WIDTH - 8,
+            Math.max(8, containerRect.right - ATTACH_MENU_WIDTH)
+        );
+
+        setAttachMenuPosition({
+            left,
+            bottom: Math.max(5, viewportHeight - containerRect.top + 5),
+        });
+    }, []);
+
+    const closeAttachMenu = useCallback(() => {
+        if (!isAttachMenuOpen || isAttachMenuClosing) return;
+
+        setIsAttachMenuClosing(true);
+        if (attachCloseTimerRef.current) {
+            clearTimeout(attachCloseTimerRef.current);
+        }
+        attachCloseTimerRef.current = setTimeout(() => {
+            setIsAttachMenuOpen(false);
+            setIsAttachMenuClosing(false);
+            attachCloseTimerRef.current = null;
+        }, 200);
+    }, [isAttachMenuOpen, isAttachMenuClosing]);
+
+    const toggleAttachMenu = useCallback(() => {
+        if (isAttachMenuOpen) {
+            closeAttachMenu();
+            return;
+        }
+
+        if (attachCloseTimerRef.current) {
+            clearTimeout(attachCloseTimerRef.current);
+            attachCloseTimerRef.current = null;
+        }
+        setIsAttachMenuClosing(false);
+        updateAttachMenuPosition();
+        setIsAttachMenuOpen(true);
+    }, [closeAttachMenu, isAttachMenuOpen, updateAttachMenuPosition]);
+
     useEffect(() => {
         if (!isAttachMenuOpen) return;
-        const closeOnOutsideClick = (event: MouseEvent) => {
-            const target = event.target as Node;
-            if (attachButtonRef.current?.contains(target) || attachMenuRef.current?.contains(target)) return;
-            setIsAttachMenuOpen(false);
+
+        const handlePointerDown = (event: PointerEvent) => {
+            const target = event.target as Node | null;
+            if (target && attachButtonRef.current?.contains(target)) return;
+            if (target && attachMenuRef.current?.contains(target)) return;
+            closeAttachMenu();
         };
-        document.addEventListener('mousedown', closeOnOutsideClick);
-        return () => document.removeEventListener('mousedown', closeOnOutsideClick);
-    }, [isAttachMenuOpen]);
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') closeAttachMenu();
+        };
+        const handleViewportChange = () => updateAttachMenuPosition();
+
+        document.addEventListener('pointerdown', handlePointerDown);
+        document.addEventListener('keydown', handleKeyDown);
+        window.addEventListener('resize', handleViewportChange);
+        window.addEventListener('scroll', handleViewportChange, true);
+        return () => {
+            document.removeEventListener('pointerdown', handlePointerDown);
+            document.removeEventListener('keydown', handleKeyDown);
+            window.removeEventListener('resize', handleViewportChange);
+            window.removeEventListener('scroll', handleViewportChange, true);
+        };
+    }, [closeAttachMenu, isAttachMenuOpen, updateAttachMenuPosition]);
 
     const send = async () => {
-        const content = body.trim();
+        const content = (inputControllerRef.current?.getValue() || '').trim();
         if (!content || sending || isUploading) return;
         setSending(true);
         setSendError('');
         const result = await submitPmReply(id, content);
         setSending(false);
         if (result.status === 'sent') {
-            applyBody('', { focus: true });
+            inputControllerRef.current?.setValue('', { focus: true });
             setPreviewMedia([]);
             return;
         }
@@ -374,10 +416,11 @@ function PmConversationView({ id }: { id: string }) {
                 })}
                 {!isInitialLoading && detail && detail.messages.length === 0 && <div class="pm-empty-state">这个会话还没有短信</div>}
             </div>
-            <div class="chat-input-container dollars-pm-input-container">
+            <div class="chat-input-container dollars-pm-input-container" ref={inputContainerRef}>
+                <TextFormatter editorRef={composerRef} inputControllerRef={inputControllerRef} />
                 <SmileyPanel
                     onSelect={code => inputControllerRef.current?.insertText(code, { focus: true })}
-                    textareaRef={composerRef}
+                    textareaRef={composerProxyRef}
                 />
                 <div class="chat-input-area">
                     {sendError && <div class="dollars-pm-error dollars-pm-input-error">{sendError}</div>}
@@ -392,31 +435,25 @@ function PmConversationView({ id }: { id: string }) {
                             onClick={() => toggleSmileyPanel()}
                         />
                         <div class="dollars-input-wrapper">
-                            <textarea
+                            <div
                                 ref={composerRef}
-                                class="chat-textarea dollars-pm-textarea"
-                                value={body}
-                                placeholder="输入短信"
-                                disabled={sending || !detail?.replyForm}
-                                onInput={event => {
-                                    const textarea = event.currentTarget;
-                                    bodyRef.current = textarea.value;
-                                    selectionRef.current = {
-                                        start: textarea.selectionStart,
-                                        end: textarea.selectionEnd,
-                                    };
-                                    setBody(textarea.value);
-                                    parseMediaFiles(textarea.value);
-                                    resizeComposer();
-                                }}
-                                onSelect={event => {
-                                    selectionRef.current = {
-                                        start: event.currentTarget.selectionStart,
-                                        end: event.currentTarget.selectionEnd,
-                                    };
-                                }}
+                                class={`chat-textarea chat-rich-editor dollars-pm-textarea${canCompose ? '' : ' is-disabled'}`}
+                                contentEditable={canCompose}
+                                role="textbox"
+                                aria-multiline="true"
+                                data-placeholder="输入短信"
+                                spellcheck={false}
+                                onInput={handleInput}
+                                onCompositionStart={handleCompositionStart}
+                                onCompositionEnd={handleCompositionEnd}
                                 onPaste={handlePaste}
-                                onKeyDown={event => handleComposerKeyDown(event, send)}
+                                onKeyDown={handleEditorKeyDown}
+                            />
+                            <textarea
+                                ref={composerProxyRef}
+                                class="chat-textarea-proxy"
+                                tabIndex={-1}
+                                aria-hidden="true"
                             />
                         </div>
                         <div class="input-actions">
@@ -425,32 +462,42 @@ function PmConversationView({ id }: { id: string }) {
                                     ref={attachButtonRef}
                                     type="button"
                                     id="dollars-attach-btn"
-                                    class={`action-btn ${isAttachMenuOpen ? 'active' : ''}`}
+                                    class={`action-btn ${isAttachMenuOpen && !isAttachMenuClosing ? 'active' : ''}`}
                                     title="上传附件"
                                     aria-haspopup="menu"
-                                    aria-expanded={isAttachMenuOpen}
+                                    aria-expanded={isAttachMenuOpen && !isAttachMenuClosing}
                                     disabled={sending || isUploading || !detail?.replyForm}
-                                    onClick={() => setIsAttachMenuOpen(open => !open)}
+                                    onClick={toggleAttachMenu}
                                 />
-                                {isAttachMenuOpen && (
-                                    <div ref={attachMenuRef} class="dollars-pm-attach-menu context-menu-items" role="menu">
+                            </div>
+                            {isAttachMenuOpen && attachMenuPosition && (
+                                <FloatingPortal>
+                                    <div
+                                        ref={attachMenuRef}
+                                        class={`dollars-attach-menu context-menu-items ${isAttachMenuClosing ? 'closing' : ''}`}
+                                        role="menu"
+                                        style={{
+                                            left: `${attachMenuPosition.left}px`,
+                                            bottom: `${attachMenuPosition.bottom}px`,
+                                        }}
+                                    >
                                         <button type="button" role="menuitem" onClick={() => {
-                                            setIsAttachMenuOpen(false);
+                                            closeAttachMenu();
                                             handleAttachMediaClick();
                                         }}>
                                             <span class="context-icon" aria-hidden="true" dangerouslySetInnerHTML={{ __html: iconPhoto }} />
                                             <span>媒体</span>
                                         </button>
                                         <button type="button" role="menuitem" onClick={() => {
-                                            setIsAttachMenuOpen(false);
+                                            closeAttachMenu();
                                             handleAttachFileClick();
                                         }}>
                                             <span class="context-icon" aria-hidden="true" dangerouslySetInnerHTML={{ __html: iconFile }} />
                                             <span>文件</span>
                                         </button>
                                     </div>
-                                )}
-                            </div>
+                                </FloatingPortal>
+                            )}
                             <input
                                 ref={fileInputRef}
                                 type="file"

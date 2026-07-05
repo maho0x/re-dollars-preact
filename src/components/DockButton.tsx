@@ -1,6 +1,7 @@
 import { useEffect } from 'preact/hooks';
 import { isChatOpen, toggleChat } from '@/stores/chatState';
-import { dockIconFlashing, stopDockFlashing, notifications } from './NotificationManager';
+import { pmUnreadCount } from '@/stores/bangumiPm';
+import { dockIconFlashing, dollarsNotifications, stopDockFlashing } from '@/stores/notifications';
 
 function updateBadge(link: HTMLAnchorElement, count: number) {
     let badge = link.querySelector('.dock-notif-badge') as HTMLElement | null;
@@ -31,7 +32,7 @@ function createDockLink() {
     link.addEventListener('click', (e) => {
         e.preventDefault();
         toggleChat(!isChatOpen.value);
-        if (!isChatOpen.value) {
+        if (isChatOpen.value) {
             stopDockFlashing();
         }
     });
@@ -56,11 +57,21 @@ export function DockButton() {
         const unsubscribe = dockIconFlashing.subscribe((flashing) => {
             link.classList.toggle('flashing', flashing);
         });
-        const unsubscribeCount = notifications.subscribe((items) => updateBadge(link, items.length));
+        // Dock 角标合并 Dollars 提醒与 Bangumi 未读短信，代表「聊天面板里有待处理内容」。
+        // 聊天窗打开时无需角标（面板内已能看到），置零隐藏。
+        const renderBadge = () => {
+            const count = isChatOpen.peek() ? 0 : dollarsNotifications.peek().length + pmUnreadCount.peek();
+            updateBadge(link, count);
+        };
+        const unsubscribeCount = dollarsNotifications.subscribe(renderBadge);
+        const unsubscribePm = pmUnreadCount.subscribe(renderBadge);
+        const unsubscribeChatOpen = isChatOpen.subscribe(renderBadge);
 
         return () => {
             unsubscribe();
             unsubscribeCount();
+            unsubscribePm();
+            unsubscribeChatOpen();
             li.remove();
         };
     }, []);

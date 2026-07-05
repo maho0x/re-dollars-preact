@@ -3,8 +3,11 @@ import { activeConversationId, setActiveConversation } from './conversations';
 import { isChatOpen } from './chatState';
 import { chatLayoutReady, isNarrowLayout, mobileChatViewActive, setMobileChatView, toggleSearch } from '@/stores/ui';
 import { createPm, fetchPmConversation, fetchPmInbox, sendPmReply } from '@/services/bangumiPm/client';
+import { fetchNotify, type BangumiNotify } from '@/services/bangumiPm/notify';
 import { toSameOriginPmPath } from '@/services/bangumiPm/parser';
+import { settings } from '@/stores/user';
 import { getAvatarUrl } from '@/utils/format';
+import { addPmNotification, dismissPmNotification, prunePmNotifications } from '@/stores/notifications';
 import type { BangumiPmConversation, BangumiPmConversationDetail } from '@/types/pm';
 
 export const pmConversations = signal<BangumiPmConversation[]>([]);
@@ -16,6 +19,27 @@ export const pmNextInboxPage = signal<string | null>(null);
 export const pmDetailLoading = signal(false);
 export const pmDetailError = signal('');
 export const pmComposeReceiver = signal('');
+// 未读短信总数（来自 /json/notify）。即使聊天面板关闭也会更新，用于 Dock 角标。
+export const pmUnreadCount = signal(0);
+// 每会话未读数（来自 /json/notify，id → 未读数）。始终新鲜，不依赖收件箱 HTML 解析，
+// 用于「在会话视图里也能反映其他会话的新消息」这类角标。
+export const pmUnreadByConversation = signal<Record<string, number>>({});
+
+function isSameUnreadMap(a: Record<string, number>, b: Record<string, number>) {
+    const keysA = Object.keys(a);
+    if (keysA.length !== Object.keys(b).length) return false;
+    return keysA.every(key => a[key] === b[key]);
+}
+// 本地把某会话标记为已读：立刻扣减 notify 派生的角标信号，不必等下一次轮询。
+// （读取会话页会在服务端标记已读，下一次 notify 会与此一致。）
+function markPmConversationRead(id: string) {
+    const prev = pmUnreadByConversation.peek()[id] || 0;
+    if (prev <= 0) return;
+    const next = { ...pmUnreadByConversation.peek() };
+    delete next[id];
+    pmUnreadByConversation.value = next;
+    pmUnreadCount.value = Math.max(0, pmUnreadCount.peek() - prev);
+}
 
 let inboxRequest: Promise<void> | null = null;
 const detailRequests = new Map<string, Promise<void>>();
@@ -25,6 +49,20 @@ const lastDetailLoadedAt = new Map<string, number>();
 
 const PM_INBOX_REFRESH_INTERVAL = 120_000;
 const PM_DETAIL_REFRESH_INTERVAL = 30_000;
+// /json/notify 极轻量，可持续轮询以驱动全局角标与变更探测。
+// 面板打开时用更快的节奏，尽快发现对方新消息；关闭时只需维持角标，放慢即可。
+const PM_NOTIFY_POLL_INTERVAL_OPEN = 5_000;
+const PM_NOTIFY_POLL_INTERVAL_IDLE = 15_000;
+
+// 把 notify 结果压成一个签名：未读总数 + 每个未读会话的 id:未读数。
+// 只有签名变化时才触发昂贵的收件箱/会话 HTML 刷新。
+function pmNotifySignature(notify: BangumiNotify) {
+    const conversations = notify.pmList
+        .map(item => `${item.id}:${item.unreadCount}`)
+        .sort()
+        .join(',');
+    return `${notify.pmCount}|${conversations}`;
+}
 
 function arePmConversationsEqual(
     current: BangumiPmConversation[],
@@ -181,6 +219,9 @@ export function loadPmDetail(id: string, path = `/pm/conversation/${id}.chii`, f
                     item.id === id ? { ...item, unreadCount: 0 } : item
                 );
             }
+            // 会话被读取后（服务端已标记已读），撤掉卡片并立即扣减各处角标
+            dismissPmNotification(id);
+            markPmConversationRead(id);
             lastDetailLoadedAt.set(id, Date.now());
             if (pmDetailError.peek()) pmDetailError.value = '';
         })
@@ -307,53 +348,153 @@ export async function submitNewPm(receiver: string, title: string, body: string)
 
 export function startPmPolling() {
     if (!isBangumiLoggedIn()) return () => {};
-    let timer: ReturnType<typeof setTimeout> | null = null;
     let stopped = false;
+    let notifyTimer: ReturnType<typeof setTimeout> | null = null;
+    let notifyController: AbortController | null = null;
+    let lastSignature = '';
+    let hasSignature = false;
+    // 收件箱 HTML 实际同步到的 notify 签名。与最新签名不同即视为过期，需强制刷新。
+    // 关键：在会话视图里 notify 看到新短信时无法刷新收件箱，此值会落后；
+    // 一旦返回列表（收件箱可刷新）就据此补刷，让列表的预览与角标跟上。
+    let inboxSyncedSignature = '';
+    // 上一轮各会话未读数，用于识别「新到消息」（未读数增加或会话新出现）。
+    const previousUnread = new Map<string, number>();
+    let hasBaseline = false;
 
-    const refresh = () => {
+    // 面板可见时的按需加载：沿用各 store 内建的节流间隔，不会造成刷屏。
+    // 由聊天开关/布局/会话切换等订阅在初始与变化时触发。
+    const loadVisibleData = () => {
         if (!isChatOpen.peek() || document.visibilityState !== 'visible') return;
-        if (shouldLoadPmInbox()) void loadPmInbox();
+        if (shouldLoadPmInbox()) {
+            // notify 指示收件箱已过期（如刚从会话视图返回列表）时强制刷新，否则走普通节流。
+            if (hasSignature && lastSignature !== inboxSyncedSignature) {
+                inboxSyncedSignature = lastSignature;
+                void loadPmInbox(true);
+            } else {
+                void loadPmInbox();
+            }
+        }
         const id = activePmId();
         if (id) void loadPmDetail(id);
     };
-    const hasPollingWork = () => shouldLoadPmInbox() || !!activePmId();
-    const schedule = () => {
-        if (timer) clearTimeout(timer);
-        if (stopped || !isChatOpen.peek() || document.visibilityState !== 'visible') return;
-        if (!hasPollingWork()) return;
-        timer = setTimeout(() => {
-            refresh();
-            schedule();
-        }, activePmId() ? PM_DETAIL_REFRESH_INTERVAL : PM_INBOX_REFRESH_INTERVAL);
+
+    const emitPmNotifications = (notify: BangumiNotify) => {
+        // 首个轮询只建立基线，避免为进入页面时的历史未读集中刷屏。
+        // 聊天窗打开时不生成卡片（面板内已能看到），但仍更新基线，避免关闭时集中补弹。
+        if (settings.value.notificationType === 'detail' && hasBaseline && !isChatOpen.peek()) {
+            for (const item of notify.pmList) {
+                if (item.unreadCount <= (previousUnread.get(item.id) || 0)) continue;
+                const known = pmConversations.peek().find(conversation => conversation.id === item.id);
+                addPmNotification(item, known?.avatar || '');
+            }
+        }
+        // 在别处（其它标签页/原站）已读的会话不再出现在未读列表里，撤掉其残留卡片。
+        const unreadIds = new Set(notify.pmList.map(item => item.id));
+        prunePmNotifications(unreadIds);
+
+        previousUnread.clear();
+        for (const item of notify.pmList) previousUnread.set(item.id, item.unreadCount);
+        hasBaseline = true;
     };
-    const refreshAndSchedule = () => {
-        refresh();
-        schedule();
+
+    const applyNotify = (notify: BangumiNotify) => {
+        // 全局角标：无论聊天是否打开都更新。
+        if (pmUnreadCount.peek() !== notify.pmCount) pmUnreadCount.value = notify.pmCount;
+
+        const unreadMap: Record<string, number> = {};
+        for (const item of notify.pmList) unreadMap[item.id] = item.unreadCount;
+        if (!isSameUnreadMap(pmUnreadByConversation.peek(), unreadMap)) {
+            pmUnreadByConversation.value = unreadMap;
+        }
+
+        emitPmNotifications(notify);
+
+        const signature = pmNotifySignature(notify);
+        const changed = !hasSignature || signature !== lastSignature;
+        lastSignature = signature;
+        hasSignature = true;
+
+        if (!isChatOpen.peek() || document.visibilityState !== 'visible') return;
+        // 收件箱可刷新且签名落后时强制刷新（signature 只在真正刷新后才记为已同步，
+        // 因此在会话视图里「消费」不掉，返回列表时仍会补刷）。
+        if (shouldLoadPmInbox() && signature !== inboxSyncedSignature) {
+            inboxSyncedSignature = signature;
+            void loadPmInbox(true);
+        }
+        // 活动会话：有变化且该会话有新未读时刷新。
+        if (changed) {
+            const id = activePmId();
+            if (id && notify.pmList.some(item => item.id === id)) {
+                void loadPmDetail(id, undefined, true);
+            }
+        }
     };
+
+    const pollNotify = async () => {
+        if (stopped || document.visibilityState !== 'visible') return;
+        notifyController?.abort();
+        notifyController = new AbortController();
+        try {
+            const notify = await fetchNotify(notifyController.signal);
+            if (!stopped) applyNotify(notify);
+        } catch {
+            // 瞬时网络/解析错误：忽略，下个周期重试。
+        }
+    };
+
+    const scheduleNotify = () => {
+        if (notifyTimer) clearTimeout(notifyTimer);
+        if (stopped || document.visibilityState !== 'visible') return;
+        const interval = isChatOpen.peek() ? PM_NOTIFY_POLL_INTERVAL_OPEN : PM_NOTIFY_POLL_INTERVAL_IDLE;
+        notifyTimer = setTimeout(async () => {
+            await pollNotify();
+            scheduleNotify();
+        }, interval);
+    };
+
+    const kickNotify = () => {
+        void pollNotify();
+        scheduleNotify();
+    };
+
     const handleVisibility = () => {
-        if (document.visibilityState === 'visible') refresh();
-        schedule();
+        if (document.visibilityState === 'visible') {
+            loadVisibleData();
+            kickNotify();
+        } else {
+            if (notifyTimer) clearTimeout(notifyTimer);
+            notifyController?.abort();
+        }
     };
-    const unsubscribe = activeConversationId.subscribe(schedule);
+
+    let lastChatOpen = isChatOpen.peek();
+    const unsubscribeConversation = activeConversationId.subscribe(loadVisibleData);
     const unsubscribeChatOpen = isChatOpen.subscribe(open => {
-        if (open) refresh();
-        schedule();
+        loadVisibleData();
+        if (open === lastChatOpen) return; // 忽略订阅时的首次立即触发
+        lastChatOpen = open;
+        // 打开时立即拉取并切到快节奏；关闭时重排到慢节奏。
+        if (open) kickNotify();
+        else scheduleNotify();
     });
-    const unsubscribeChatLayoutReady = chatLayoutReady.subscribe(refreshAndSchedule);
-    const unsubscribeNarrowLayout = isNarrowLayout.subscribe(refreshAndSchedule);
-    const unsubscribeMobileChatView = mobileChatViewActive.subscribe(refreshAndSchedule);
+    const unsubscribeChatLayoutReady = chatLayoutReady.subscribe(loadVisibleData);
+    const unsubscribeNarrowLayout = isNarrowLayout.subscribe(loadVisibleData);
+    const unsubscribeMobileChatView = mobileChatViewActive.subscribe(loadVisibleData);
     document.addEventListener('visibilitychange', handleVisibility);
-    window.addEventListener('focus', refresh);
+    window.addEventListener('focus', loadVisibleData);
+
+    kickNotify();
 
     return () => {
         stopped = true;
-        if (timer) clearTimeout(timer);
-        unsubscribe();
+        if (notifyTimer) clearTimeout(notifyTimer);
+        notifyController?.abort();
+        unsubscribeConversation();
         unsubscribeChatOpen();
         unsubscribeChatLayoutReady();
         unsubscribeNarrowLayout();
         unsubscribeMobileChatView();
         document.removeEventListener('visibilitychange', handleVisibility);
-        window.removeEventListener('focus', refresh);
+        window.removeEventListener('focus', loadVisibleData);
     };
 }

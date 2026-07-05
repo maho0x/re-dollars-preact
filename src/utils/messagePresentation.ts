@@ -35,10 +35,16 @@ export function getBubbleTimestampMode(
     return prefersTrailing ? 'trailing' : 'stacked';
 }
 
+// 单条消息仅由一个可渲染的媒体（图片/表情贴纸/大表情）构成时才使用 sticker 样式。
+// [img]/[emoji]/[sticker] 的内容必须是合法的 http(s) URL，否则乱填的文字不会被渲染成图片，
+// 也就不应套用无气泡的 sticker 布局。
+const STICKER_MESSAGE_REGEX =
+    /^(?:\[img\]\s*https?:\/\/[^\s<>"'[\]]+\s*\[\/img\]|\[(?:emoji|sticker)\]\s*https?:\/\/[^\s<>"'[\]]+\s*\[\/(?:emoji|sticker)\]|\((?:musume|blake)_\d+\))$/i;
+
 export function isStickerMessage(messageText: string, isDeleted: boolean | undefined, replyToId: number | undefined) {
     if (isDeleted) return false;
     const raw = (messageText || '').trim();
-    return /^(\[img\][^\[]+\[\/img\]|\[(?:emoji|sticker)\][^\[]+\[\/(?:emoji|sticker)\]|\((?:musume|blake)_\d+\))$/i.test(raw) && !replyToId;
+    return STICKER_MESSAGE_REGEX.test(raw) && !replyToId;
 }
 
 export function renderMessageContent(message: Message) {

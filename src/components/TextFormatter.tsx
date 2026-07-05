@@ -19,7 +19,8 @@ export const formatterVisible = signal(false);
 export const formatterLinkMode = signal(false);
 
 interface TextFormatterProps {
-    editorRef: RefObject<HTMLDivElement>;
+    // 兼容 Dollars 的 contentEditable div 与短信输入框的 textarea
+    editorRef: RefObject<HTMLElement>;
     inputControllerRef: { current: RichInputController | null };
 }
 

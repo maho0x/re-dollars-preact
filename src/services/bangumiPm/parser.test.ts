@@ -48,10 +48,13 @@ describe('Bangumi PM HTML parser', () => {
                         <a href="/user/peer"><span class="avatarNeue" style="background-image:url('/peer.jpg')"></span></a>
                         <div class="pm-message-body">
                             hello <a href="/group/topic/1" onclick="bad()">link</a>
+                            <span style="font-weight:bold;">bold</span>
+                            <div class="codeHighlight"><pre>const a = 1;</pre></div>
                             <img class="smile" src="/img/smile.gif" alt="(bgm34)" onerror="bad()">
                             <img class="smile" src="https://lain.bgm.tv/img/smiles/musume/musume_06.gif" alt="(musume_06)">
                             <img class="smile" src="https://lain.bgm.tv/img/smiles/blake/blake_01.gif" alt="(blake_01)">
                             <img src="/image.jpg">
+                            <span class="text_mask" style="background-color:#555;color:#555;"><span class="inner">spoiler</span></span>
                             <script>alert(1)</script><a href="javascript:alert(1)">bad</a>
                         </div>
                         <div class="pm-message-info"><small>2026-7-5 02:04 / del</small></div>
@@ -75,18 +78,24 @@ describe('Bangumi PM HTML parser', () => {
             id: '10',
             isSelf: false,
             topic: 'Topic',
-            presentationText: expect.stringContaining('[img]/image.jpg[/img]'),
+            presentationText: expect.stringContaining('[img]https://bgm.tv/image.jpg[/img]'),
             timestamp: expect.any(Number),
             timestampText: '2026-7-5 02:04',
         }));
         expect(new Date(detail.messages[0].timestamp! * 1000).getHours()).toBe(2);
         expect(new Date(detail.messages[0].timestamp! * 1000).getMinutes()).toBe(4);
-        expect(detail.messages[0].bodyHtml).toContain('href="https://bgm.tv/group/topic/1"');
+        // 与 Dollars 主聊天一致：站内链接规范化为相对路径
+        expect(detail.messages[0].bodyHtml).toContain('href="/group/topic/1"');
         expect(detail.messages[0].bodyHtml).toContain('rel="noopener noreferrer"');
-        expect(detail.messages[0].bodyHtml).toContain('class="smile smiley smiley-musume"');
-        expect(detail.messages[0].bodyHtml).toContain('class="smile smiley smiley-blake"');
+        // 加粗与代码块走 Dollars 渲染
+        expect(detail.messages[0].bodyHtml).toContain('<strong>bold</strong>');
+        expect(detail.messages[0].bodyHtml).toContain('<div class="codeHighlight"><pre>const a = 1;</pre></div>');
+        // 遮罩还原为 Dollars 的 spoiler 结构
+        expect(detail.messages[0].bodyHtml).toContain('<span class="text_mask"><span class="inner">spoiler</span></span>');
+        expect(detail.messages[0].bodyHtml).toContain('class="smiley smiley-musume"');
+        expect(detail.messages[0].bodyHtml).toContain('class="smiley smiley-blake"');
         expect(detail.messages[0].bodyHtml).toContain('class="image-container"');
-        expect(detail.messages[0].bodyHtml).toContain('class="full-image is-loaded"');
+        expect(detail.messages[0].bodyHtml).toContain('class="full-image"');
         expect(detail.messages[0].bodyHtml).not.toContain('onclick');
         expect(detail.messages[0].bodyHtml).not.toContain('onerror');
         expect(detail.messages[0].bodyHtml).not.toContain('<script');

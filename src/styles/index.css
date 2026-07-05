@@ -475,24 +475,23 @@ html[data-theme="dark"] .conversation-item .avatar {
 .dollars-pm-message .text-content br {
   display: initial;
 }
+/* 防止 <pre>（代码块 / LaTeX 源码等）在气泡内横向溢出 */
+.bubble pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  max-width: 100%;
+  margin: 0;
+}
 .dollars-pm-avatar-link {
   display: contents;
 }
 .dollars-pm-input-container {
   z-index: 101;
 }
-.dollars-pm-attach-menu {
-  position: absolute;
-  right: 0;
-  bottom: 46px;
-  z-index: var(--dollars-z-index-overlay);
-  width: 176px;
-  min-width: 176px;
-  transform-origin: bottom right;
-  animation: dollars-panel-slide-up-right 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-.dollars-pm-textarea:disabled {
+.dollars-pm-textarea.is-disabled {
   opacity: 0.55;
+  pointer-events: none;
 }
 .dollars-pm-compose-card input,
 .dollars-pm-compose-card textarea {
@@ -755,7 +754,13 @@ html[data-theme="dark"] .chat-header {
   align-items: center;
   gap: 5px;
 }
+.chat-header .header-back-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
 .chat-header .header-btn {
+  position: relative;
   width: 24px;
   height: 24px;
   border: none;
@@ -770,6 +775,25 @@ html[data-theme="dark"] .chat-header {
   background-repeat: no-repeat;
   background-position: center;
   background-size: 18px;
+}
+.chat-header .header-back-wrap .header-btn-badge {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  z-index: 2;
+  min-width: 15px;
+  height: 15px;
+  border-radius: 8px;
+  background-color: var(--primary-color);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 15px;
+  text-align: center;
+  padding: 0 4px;
+  box-sizing: border-box;
+  pointer-events: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
 }
 .chat-header .header-btn:hover {
   background-color: rgba(0, 0, 0, 0.05);

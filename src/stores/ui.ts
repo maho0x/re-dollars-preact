@@ -43,8 +43,10 @@ export {
 
 } from '@/stores/panels';
 
+const browserWindow = typeof window !== 'undefined' ? window : undefined;
+
 // UI 状态
-export const isMobileViewport = signal(window.innerWidth <= 768);
+export const isMobileViewport = signal((browserWindow?.innerWidth || 1024) <= 768);
 export const isNarrowLayout = signal(false);
 
 // 初始化时不恢复状态，等待设置加载后再决定
@@ -57,8 +59,8 @@ export const chatLayoutReady = signal(false);
 export const inputAreaHeight = signal(60); // 默认为 60px
 
 // 监听窗口大小
-window.addEventListener('resize', () => {
-    isMobileViewport.value = window.innerWidth <= 768;
+browserWindow?.addEventListener?.('resize', () => {
+    isMobileViewport.value = browserWindow.innerWidth <= 768;
 });
 
 // 切换最大化

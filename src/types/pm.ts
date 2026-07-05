@@ -45,6 +45,16 @@ export type BangumiPmComposeForm = {
     receiver: string;
 };
 
+// 右下角通知卡片用的短信通知（来自 /json/notify 的 pm_list 增量）
+export type PmNotification = {
+    id: string;
+    href: string;
+    nickname: string;
+    avatar: string;
+    title: string;
+    unreadCount: number;
+};
+
 export type BangumiPmSendOutcome =
     | { status: 'sent'; detail: BangumiPmConversationDetail }
     | { status: 'rejected'; error: string }

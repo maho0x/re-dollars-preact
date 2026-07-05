@@ -4,7 +4,7 @@ import { isMaximized, toggleMaximize, toggleSearch, isSearchActive, isNarrowLayo
 import { activeExtensionId, extensionConversations } from '@/stores/extensionConversations';
 import { openSettingsPanel } from '@/utils/settingsPanel';
 import type { Conversation } from '@/types';
-import { activePmId, pmComposeReceiver, pmConversations, pmDetails } from '@/stores/bangumiPm';
+import { activePmId, pmComposeReceiver, pmConversations, pmDetails, pmUnreadByConversation } from '@/stores/bangumiPm';
 
 export function ChatHeader() {
     const handleClose = () => {
@@ -42,6 +42,17 @@ export function ChatHeader() {
     const isPmActive = activeConversationId.value.startsWith('pm:');
 
     const isShowingChatView = isNarrowLayout.value && mobileChatViewActive.value;
+
+    // 当前会话以外的未读数：窄视图下返回按钮上加角标，提示列表里还有新消息。
+    // 短信未读取自 notify（始终新鲜），频道未读取自会话列表，均排除当前会话。
+    const otherUnread = conversations.value.reduce(
+        (sum, c) => (c.id === activeConversationId.value ? sum : sum + (c.unreadCount || 0)),
+        0
+    ) + Object.entries(pmUnreadByConversation.value).reduce(
+        (sum, [id, count]) => (`pm:${id}` === activeConversationId.value ? sum : sum + (count || 0)),
+        0
+    );
+    const otherUnreadLabel = otherUnread > 99 ? '99+' : String(otherUnread);
 
     // 动态标题
     let mainTitle = 'Re:Dollars';
@@ -128,14 +139,17 @@ export function ChatHeader() {
                         style={{ transform: mobileChatViewActive.value ? 'scaleX(-1)' : 'none' }}
                     />
                 )}
-                {/* Back button - shown only in narrow mode when chat is active */}
-                <button
-                    id="dollars-back-btn"
-                    class="header-btn"
-                    title="返回"
-                    onClick={handleBack}
-                    style={{ display: isShowingChatView ? 'flex' : 'none' }}
-                />
+                {/* Back button - shown only in narrow mode when chat is active。
+                    按钮用 mask-image 上色，角标必须作为兄弟节点放在外层容器，否则会被 mask 裁成图标形状。 */}
+                <span class="header-back-wrap" style={{ display: isShowingChatView ? 'inline-flex' : 'none' }}>
+                    <button
+                        id="dollars-back-btn"
+                        class="header-btn"
+                        title={otherUnread > 0 ? `返回（其他会话有 ${otherUnread} 条新消息）` : '返回'}
+                        onClick={handleBack}
+                    />
+                    {otherUnread > 0 && <span class="header-btn-badge">{otherUnreadLabel}</span>}
+                </span>
             </div>
 
             <div class="title-wrapper">
