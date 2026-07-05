@@ -196,6 +196,14 @@ html[data-theme="dark"] #dollars-chat-window {
   border-right: none;
   box-shadow: inset -1px 0 0 0 rgba(0, 0, 0, 0.03);
   background-color: var(--dollars-bg);
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), max-width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+/* 宽屏模式：手动折叠侧边栏（聊天区自动填满剩余空间） */
+#dollars-chat-window.mobile-chat-active:not(.is-narrow) #dollars-sidebar {
+  width: 0;
+  max-width: 0;
+  overflow: hidden;
+  box-shadow: none;
 }
 #dollars-sidebar-search-container {
   padding: 8px;
@@ -698,7 +706,8 @@ html[data-theme="dark"] .chat-header {
   gap: 4px;
   margin-right: 8px;
 }
-#dollars-chat-window.is-narrow .chat-header-left-pane {
+#dollars-chat-window.is-narrow .chat-header-left-pane,
+#dollars-chat-window.mobile-chat-active:not(.is-narrow) .chat-header-left-pane {
   width: auto;
   max-width: none;
 }
@@ -2628,6 +2637,17 @@ span.text_mask {
   mask-repeat: no-repeat;
   -webkit-mask-position: center;
   mask-position: center;
+}
+#dollars-sidebar-toggle-btn {
+  background-color: var(--dollars-icon-color);
+  -webkit-mask-image: var(--dollars-icon-back);
+  mask-image: var(--dollars-icon-back);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: 18px;
+  mask-size: 18px;
 }
 #dollars-text-formatter {
   position: fixed;

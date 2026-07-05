@@ -49,7 +49,9 @@ export const isNarrowLayout = signal(false);
 
 // 初始化时不恢复状态，等待设置加载后再决定
 export const isMaximized = signal(false);
-export const mobileChatViewActive = signal(false);
+// 侧边栏可见性（mobileChatViewActive === true 表示隐藏侧边栏、只显示聊天）。
+// 完全由用户手动切换并持久化，不再随窗口尺寸自动变化；启动时恢复上次状态。
+export const mobileChatViewActive = signal(loadWindowState().mobileChatViewActive ?? false);
 export const chatLayoutReady = signal(false);
 
 export const inputAreaHeight = signal(60); // 默认为 60px
@@ -76,53 +78,20 @@ export function setMobileChatView(active: boolean) {
     }
 }
 
-// 标记是否已完成首次布局检测
-let hasInitializedLayout = false;
-
 // 重置布局检测状态（在聊天窗口首次挂载时调用）
 export function resetLayoutCheck() {
-    hasInitializedLayout = false;
     chatLayoutReady.value = false;
 }
 
-// 检查并更新 narrow 布局
+// 检查并更新 narrow 布局。
+// 仅根据宽度切换布局模式（并排 vs 滑动单视图），不再自动改变侧边栏可见性。
 export function checkNarrowLayout(width: number) {
-    const wasNarrow = isNarrowLayout.value;
-    const isNowNarrow = width < 600 || isMobileViewport.value;
-    isNarrowLayout.value = isNowNarrow;
-
-    // 首次检测：如果没有保存的状态，则根据布局设置默认值
-    if (!hasInitializedLayout) {
-        hasInitializedLayout = true;
-        // 只有在没有保存状态时才设置默认值
-        const savedMobileChatView = loadWindowState().mobileChatViewActive;
-        if (savedMobileChatView === null) {
-            if (isNowNarrow) {
-                mobileChatViewActive.value = true;
-            } else {
-                mobileChatViewActive.value = false;
-            }
-        }
-        return;
-    }
-
-    // 后续检测（resize）：只在状态变化时切换
-    if (!wasNarrow && isNowNarrow) {
-        // wide → narrow: 进入聊天视图
-        mobileChatViewActive.value = true;
-    } else if (wasNarrow && !isNowNarrow) {
-        // narrow → wide: 退出单视图模式
-        mobileChatViewActive.value = false;
-    }
+    isNarrowLayout.value = width < 600 || isMobileViewport.value;
 }
 
-// 在聊天窗口打开时调用，确保窄布局下进入聊天视图
+// 在聊天窗口打开时调用：更新布局模式并标记布局就绪。
+// 不再强制进入聊天视图——侧边栏可见性由用户手动控制并已从存储恢复。
 export function ensureNarrowLayoutChatView(width: number) {
-    const isNowNarrow = width < 600 || isMobileViewport.value;
-    isNarrowLayout.value = isNowNarrow;
-
-    if (isNowNarrow && !mobileChatViewActive.value) {
-        mobileChatViewActive.value = true;
-    }
+    isNarrowLayout.value = width < 600 || isMobileViewport.value;
     chatLayoutReady.value = true;
 }

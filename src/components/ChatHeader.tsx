@@ -27,6 +27,10 @@ export function ChatHeader() {
         setMobileChatView(false);
     };
 
+    const handleToggleSidebar = () => {
+        setMobileChatView(!mobileChatViewActive.value);
+    };
+
     // 获取当前会话信息
     const activeConv = conversations.value.find((c: Conversation) => c.id === activeConversationId.value);
     const activeExtension = activeExtensionId.value
@@ -114,6 +118,16 @@ export function ChatHeader() {
                     onClick={handleSettings}
                     style={{ display: isShowingChatView ? 'none' : 'flex' }}
                 />
+                {/* Sidebar toggle - wide mode only; reuses the back-arrow icon */}
+                {!isNarrowLayout.value && (
+                    <button
+                        id="dollars-sidebar-toggle-btn"
+                        class="header-btn"
+                        title={mobileChatViewActive.value ? '显示会话列表' : '隐藏会话列表'}
+                        onClick={handleToggleSidebar}
+                        style={{ transform: mobileChatViewActive.value ? 'scaleX(-1)' : 'none' }}
+                    />
+                )}
                 {/* Back button - shown only in narrow mode when chat is active */}
                 <button
                     id="dollars-back-btn"
