@@ -49,6 +49,9 @@ export const TYPING_AUTO_CLEAR = 10000;
 export const HEARTBEAT_INTERVAL = 25000;
 export const RECONNECT_DELAY = 2000;
 export const CONNECTION_CHECK_INTERVAL = 10000;
+// 发出 ping 后等待任意入站消息（含 pong）的存活窗口；超时则判定为半开连接并主动重连。
+// 必须小于 HEARTBEAT_INTERVAL，否则下一次 ping 会在超时前重置计时器，掩盖僵尸连接。
+export const PONG_TIMEOUT = 10000;
 
 // 滚动阈值 (px)
 export const SCROLL_BOTTOM_THRESHOLD = 50;
