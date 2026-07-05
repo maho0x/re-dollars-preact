@@ -24,6 +24,9 @@ export type BangumiPmMessage = {
     timestamp: number | null;
     timestampText: string;
     topic?: string;
+    stableKey?: string;
+    rawBody?: string;
+    state?: 'sending' | 'sent' | 'failed';
 };
 
 export type BangumiPmForm = {

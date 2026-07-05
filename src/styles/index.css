@@ -418,19 +418,30 @@ html[data-theme="dark"] .conversation-item .avatar {
   display: flex;
   flex: 1;
   min-height: 0;
-  padding-top: 40px;
   position: relative;
   z-index: 1;
 }
 .dollars-pm-view {
   flex-direction: column;
 }
+.dollars-pm-compose-view {
+  padding-top: 40px;
+}
 .dollars-pm-message-scroll {
+  contain: layout style paint;
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
+  overflow-y: scroll;
+  overflow-x: hidden;
+  padding: 10px;
+  padding-top: 50px;
+  padding-bottom: 80px;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
-  padding: 10px 10px 90px;
+  background: transparent;
 }
 .dollars-pm-topic {
   width: fit-content;

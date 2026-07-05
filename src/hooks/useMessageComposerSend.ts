@@ -1,6 +1,10 @@
 import { useCallback, useState, useRef } from 'preact/hooks';
 import { submitComposerMessage, type SubmitComposerMessageOptions } from '@/services/composer/sendMessage';
 
+function errorMessage(error: unknown) {
+    return error instanceof Error ? error.message : '发送失败，请重试';
+}
+
 export function useMessageComposerSend() {
     const [isSending, setIsSending] = useState(false);
     const isSendingRef = useRef(false);
@@ -13,8 +17,8 @@ export function useMessageComposerSend() {
 
         try {
             await submitComposerMessage(options);
-        } catch (error: any) {
-            alert(error?.message || '发送失败，请重试');
+        } catch (error) {
+            alert(errorMessage(error));
         } finally {
             isSendingRef.current = false;
             setIsSending(false);

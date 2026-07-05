@@ -5,10 +5,19 @@ import { chatLayoutReady, isNarrowLayout, mobileChatViewActive, setMobileChatVie
 import { createPm, fetchPmConversation, fetchPmInbox, sendPmReply } from '@/services/bangumiPm/client';
 import { fetchNotify, type BangumiNotify } from '@/services/bangumiPm/notify';
 import { toSameOriginPmPath } from '@/services/bangumiPm/parser';
-import { settings } from '@/stores/user';
-import { getAvatarUrl } from '@/utils/format';
+import { settings, userInfo } from '@/stores/user';
+import { escapeHTML, getAvatarUrl } from '@/utils/format';
+import { processBBCode } from '@/utils/bbcode';
+import { NEW_MESSAGE_ANIMATION } from '@/utils/constants';
+import {
+    createOptimisticStableKey,
+    mergeOptimisticList,
+    optimisticTimestamp,
+    type OptimisticMessageAdapter,
+} from '@/utils/optimisticMessages';
+import { updateSignalSet } from '@/utils/signalMap';
 import { addPmNotification, dismissPmNotification, prunePmNotifications } from '@/stores/notifications';
-import type { BangumiPmConversation, BangumiPmConversationDetail } from '@/types/pm';
+import type { BangumiPmConversation, BangumiPmConversationDetail, BangumiPmMessage, BangumiPmSendOutcome } from '@/types/pm';
 
 export const pmConversations = signal<BangumiPmConversation[]>([]);
 export const pmDetails = signal<Record<string, BangumiPmConversationDetail>>({});
@@ -19,6 +28,7 @@ export const pmNextInboxPage = signal<string | null>(null);
 export const pmDetailLoading = signal(false);
 export const pmDetailError = signal('');
 export const pmComposeReceiver = signal('');
+export const pmNewMessageIds = signal<Set<string>>(new Set());
 // 未读短信总数（来自 /json/notify）。即使聊天面板关闭也会更新，用于 Dock 角标。
 export const pmUnreadCount = signal(0);
 // 每会话未读数（来自 /json/notify，id → 未读数）。始终新鲜，不依赖收件箱 HTML 解析，
@@ -46,6 +56,15 @@ const detailRequests = new Map<string, Promise<void>>();
 let hasLoadedMoreInboxPages = false;
 let lastInboxLoadedAt = 0;
 const lastDetailLoadedAt = new Map<string, number>();
+let nextOptimisticPmId = -1;
+
+const pmOptimisticAdapter: OptimisticMessageAdapter<BangumiPmMessage> = {
+    state: message => message.state,
+    stableKey: message => message.stableKey,
+    contentKey: message => normalizePmMessageText(message.rawBody || message.presentationText || message.bodyText),
+    senderKey: message => message.isSelf ? 'self' : message.userHref || 'peer',
+    timestamp: message => message.timestamp,
+};
 
 const PM_INBOX_REFRESH_INTERVAL = 120_000;
 const PM_DETAIL_REFRESH_INTERVAL = 30_000;
@@ -116,8 +135,136 @@ function arePmDetailsEqual(
                 && message.presentationText === candidate.presentationText
                 && message.timestamp === candidate.timestamp
                 && message.timestampText === candidate.timestampText
-                && message.topic === candidate.topic;
+                && message.topic === candidate.topic
+                && message.state === candidate.state
+                && message.stableKey === candidate.stableKey;
         });
+}
+
+function normalizePmMessageText(value: string | null | undefined) {
+    return (value || '').replace(/\s+/g, ' ').trim();
+}
+
+function mergeLocalPmMessages(
+    current: BangumiPmConversationDetail | undefined,
+    next: BangumiPmConversationDetail
+) {
+    const currentById = new Map((current?.messages || []).map(message => [message.id, message]));
+    const messages = mergeOptimisticList(current?.messages, next.messages, pmOptimisticAdapter, {
+        isIncomingCandidate: message => message.isSelf,
+        timestampWindowSeconds: 60,
+        mergeMatched: (incoming, local) => local.stableKey
+            ? { ...incoming, stableKey: local.stableKey, state: 'sent' as const }
+            : incoming,
+    }).map(message => {
+        const currentMessage = currentById.get(message.id);
+        return currentMessage?.stableKey && !message.stableKey
+            ? { ...message, stableKey: currentMessage.stableKey, state: currentMessage.state === 'sent' ? 'sent' as const : message.state }
+            : message;
+    });
+    return messages === next.messages ? next : { ...next, messages: [...messages] };
+}
+
+function markPmMessageNew(id: string) {
+    updateSignalSet(pmNewMessageIds, set => set.add(id));
+    setTimeout(() => updateSignalSet(pmNewMessageIds, set => set.delete(id)), NEW_MESSAGE_ANIMATION);
+}
+
+function setPmDetail(id: string, detail: BangumiPmConversationDetail) {
+    const current = pmDetails.peek()[id];
+    const merged = mergeLocalPmMessages(current, detail);
+    if (!arePmDetailsEqual(current, merged)) {
+        pmDetails.value = { ...pmDetails.peek(), [id]: merged };
+    }
+    if (current) {
+        const currentIds = new Set(current.messages.map(message => message.id));
+        const currentStableKeys = new Set(current.messages.map(message => message.stableKey).filter(Boolean));
+        for (const message of merged.messages) {
+            if (currentIds.has(message.id)) continue;
+            if (message.stableKey && currentStableKeys.has(message.stableKey)) continue;
+            markPmMessageNew(message.id);
+        }
+    }
+}
+
+function renderOptimisticPmBody(body: string) {
+    return processBBCode(escapeHTML(body), {}, {}, {});
+}
+
+function selfPmAvatar(detail: BangumiPmConversationDetail) {
+    return [...detail.messages].reverse().find(message => message.isSelf)?.avatar || userInfo.peek().avatar || '';
+}
+
+function selfPmHref(detail: BangumiPmConversationDetail) {
+    return [...detail.messages].reverse().find(message => message.isSelf)?.userHref
+        || (window.CHOBITS_USERNAME ? `/user/${window.CHOBITS_USERNAME}` : '');
+}
+
+function addOptimisticPmMessage(id: string, body: string) {
+    const detail = pmDetails.peek()[id];
+    if (!detail) return null;
+
+    const lastTimestamp = detail.messages[detail.messages.length - 1]?.timestamp || 0;
+    const timestamp = optimisticTimestamp(lastTimestamp);
+
+    const stableKey = createOptimisticStableKey('pm-temp');
+    const message: BangumiPmMessage = {
+        id: `temp-${nextOptimisticPmId--}`,
+        isSelf: true,
+        avatar: selfPmAvatar(detail),
+        userHref: selfPmHref(detail),
+        bodyHtml: renderOptimisticPmBody(body),
+        bodyText: body,
+        presentationText: body,
+        timestamp,
+        timestampText: '发送中',
+        stableKey,
+        rawBody: body,
+        state: 'sending',
+    };
+
+    pmDetails.value = {
+        ...pmDetails.peek(),
+        [id]: { ...detail, messages: [...detail.messages, message] },
+    };
+    markPmMessageNew(message.id);
+
+    return message.id;
+}
+
+function updateLocalPmMessage(id: string, messageId: string, updates: Partial<BangumiPmMessage>) {
+    const detail = pmDetails.peek()[id];
+    if (!detail) return;
+
+    pmDetails.value = {
+        ...pmDetails.peek(),
+        [id]: {
+            ...detail,
+            messages: detail.messages.map(message =>
+                message.id === messageId ? { ...message, ...updates } : message
+            ),
+        },
+    };
+}
+
+function localPmMessage(id: string, messageId: string) {
+    return pmDetails.peek()[id]?.messages.find(message => message.id === messageId);
+}
+
+async function finishPmReply(
+    id: string,
+    tempId: string,
+    result: BangumiPmSendOutcome
+) {
+    if (result.status === 'sent') {
+        setPmDetail(id, result.detail);
+        lastDetailLoadedAt.set(id, Date.now());
+        void loadPmInbox(true);
+    } else if (result.status === 'unknown') {
+        await loadPmDetail(id, undefined, true);
+    } else {
+        updateLocalPmMessage(id, tempId, { state: 'failed', timestampText: '发送失败' });
+    }
 }
 
 export function isBangumiLoggedIn() {
@@ -211,9 +358,7 @@ export function loadPmDetail(id: string, path = `/pm/conversation/${id}.chii`, f
     }
     const request = fetchPmConversation(path)
         .then(detail => {
-            if (!arePmDetailsEqual(pmDetails.peek()[id], detail)) {
-                pmDetails.value = { ...pmDetails.peek(), [id]: detail };
-            }
+            setPmDetail(id, detail);
             if (pmConversations.peek().some(item => item.id === id && item.unreadCount > 0)) {
                 pmConversations.value = pmConversations.peek().map(item =>
                     item.id === id ? { ...item, unreadCount: 0 } : item
@@ -324,21 +469,29 @@ export async function openPmForUser(user: { username: string; nickname: string; 
 export async function submitPmReply(id: string, body: string) {
     const detail = pmDetails.value[id];
     if (!detail) return { status: 'rejected' as const, error: '会话尚未加载' };
+    const tempId = addOptimisticPmMessage(id, body);
     const result = await sendPmReply(detail, body);
-    if (result.status === 'sent') {
-        pmDetails.value = { ...pmDetails.value, [id]: result.detail };
-        lastDetailLoadedAt.set(id, Date.now());
-        void loadPmInbox(true);
-    } else if (result.status === 'unknown') {
-        await loadPmDetail(id, undefined, true);
+    if (tempId) await finishPmReply(id, tempId, result);
+    return result;
+}
+
+export async function retryPmReply(id: string, tempId: string) {
+    const message = localPmMessage(id, tempId);
+    const detail = pmDetails.value[id];
+    if (!detail || !message?.rawBody || message.state !== 'failed') {
+        return { status: 'rejected' as const, error: '无法重试这条短信' };
     }
+
+    updateLocalPmMessage(id, tempId, { state: 'sending', timestampText: '发送中' });
+    const result = await sendPmReply(detail, message.rawBody);
+    await finishPmReply(id, tempId, result);
     return result;
 }
 
 export async function submitNewPm(receiver: string, title: string, body: string) {
     const result = await createPm(receiver, title, body);
     if (result.status === 'sent') {
-        pmDetails.value = { ...pmDetails.value, [result.detail.id]: result.detail };
+        setPmDetail(result.detail.id, result.detail);
         lastDetailLoadedAt.set(result.detail.id, Date.now());
         setActiveConversation(`pm:${result.detail.id}`);
         void loadPmInbox(true);

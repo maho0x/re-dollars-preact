@@ -18,6 +18,7 @@ import { lookupUsersByName } from '@/utils/api/users';
 import { transformMentions } from '@/utils/mentions';
 import { sendPendingMessage } from '@/services/websocket/client';
 import type { VoiceDraft } from '@/hooks/useVoiceRecorder';
+import type { Message } from '@/types';
 
 export type ComposerImageMeta = Record<string, { width: number; height: number }>;
 
@@ -30,76 +31,135 @@ export interface SubmitComposerMessageOptions {
     clearVoiceDraft?: () => void;
 }
 
-function withOptionalImageMeta(imageMeta: ComposerImageMeta) {
+interface ComposerActions {
+    clearInput: (focus?: boolean) => void;
+    clearMediaPreview: () => void;
+    clearVoiceDraft?: () => void;
+}
+
+interface PreparedNewMessage {
+    content: string;
+    imageMeta?: ComposerImageMeta;
+    replyToId?: number;
+    replyDetails?: NonNullable<Message['reply_details']>;
+}
+
+interface PreparedEdit {
+    id: number;
+    content: string;
+    imageMeta?: ComposerImageMeta;
+}
+
+interface PendingDelivery {
+    tempId: number;
+    stableKey: string;
+    content: string;
+}
+
+function optionalImageMeta(imageMeta: ComposerImageMeta) {
     return Object.keys(imageMeta).length > 0 ? imageMeta : undefined;
 }
 
-async function appendUploadedVoice(content: string, voiceDraft?: VoiceDraft | null) {
+async function uploadVoiceDraft(voiceDraft: VoiceDraft) {
+    const result = await uploadFile(voiceDraft.file);
+    if (result.status && result.url) return `[audio]${result.url}[/audio]`;
+    throw new Error(result.error || '语音上传失败');
+}
+
+async function attachVoice(content: string, voiceDraft?: VoiceDraft | null) {
     if (!voiceDraft) return content;
 
-    const result = await uploadFile(voiceDraft.file);
-    if (!result.status || !result.url) {
-        throw new Error(result.error || '语音上传失败');
-    }
-
-    const voiceBBCode = `[audio]${result.url}[/audio]`;
+    const voiceBBCode = await uploadVoiceDraft(voiceDraft);
     return content ? `${content}\n${voiceBBCode}` : voiceBBCode;
 }
 
-async function submitEdit(content: string, imageMeta: ComposerImageMeta, clearInput: (focus?: boolean) => void) {
-    if (!editingMessage.value) return;
+function quoteReply(content: string) {
+    const reply = replyingTo.value;
+    return reply ? `[quote=${reply.id}][/quote]${content}` : content;
+}
 
-    let finalContent = content;
-    if (editingMessage.value.hiddenQuote) {
-        finalContent = `${editingMessage.value.hiddenQuote}\n${content}`;
+function replyDetails(): Pick<PreparedNewMessage, 'replyToId' | 'replyDetails'> {
+    const reply = replyingTo.value;
+    if (!reply) return {};
+
+    return {
+        replyToId: Number(reply.id),
+        replyDetails: {
+            uid: Number(reply.uid),
+            nickname: reply.user,
+            avatar: reply.avatar,
+            content: reply.text,
+        },
+    };
+}
+
+function restoreHiddenQuote(content: string) {
+    const hiddenQuote = editingMessage.value?.hiddenQuote;
+    return hiddenQuote ? `${hiddenQuote}\n${content}` : content;
+}
+
+async function normalizeMentions(content: string) {
+    return transformMentions(content, lookupUsersByName);
+}
+
+async function prepareEdit(content: string, imageMeta: ComposerImageMeta): Promise<PreparedEdit | null> {
+    const editing = editingMessage.value;
+    if (!editing || !content) return null;
+
+    return {
+        id: Number(editing.id),
+        content: await normalizeMentions(restoreHiddenQuote(content)),
+        imageMeta: optionalImageMeta(imageMeta),
+    };
+}
+
+async function prepareNewMessage(
+    content: string,
+    imageMeta: ComposerImageMeta,
+    voiceDraft?: VoiceDraft | null,
+): Promise<PreparedNewMessage | null> {
+    const contentWithVoice = await attachVoice(content, voiceDraft);
+    if (!contentWithVoice) return null;
+
+    return {
+        content: await normalizeMentions(quoteReply(contentWithVoice)),
+        imageMeta: optionalImageMeta(imageMeta),
+        ...replyDetails(),
+    };
+}
+
+async function submitEdit(draft: PreparedEdit, clearInput: (focus?: boolean) => void) {
+    const result = await apiEditMessage(draft.id, draft.content);
+    if (!result.status) {
+        throw new Error(result.error || '编辑失败');
     }
 
-    finalContent = await transformMentions(finalContent, lookupUsersByName);
-
-    const result = await apiEditMessage(Number(editingMessage.value.id), finalContent);
-    if (!result.status) {
-        alert(result.error || '编辑失败');
-    } else {
-        clearInput();
-
-        const meta = withOptionalImageMeta(imageMeta);
-        if (meta) {
-            updateMessage(Number(editingMessage.value.id), { image_meta: meta });
-        }
+    clearInput();
+    if (draft.imageMeta) {
+        updateMessage(draft.id, { image_meta: draft.imageMeta });
     }
     cancelReplyOrEdit();
 }
 
-async function submitNewMessage(
-    content: string,
-    imageMeta: ComposerImageMeta,
-    voiceDraft: VoiceDraft | null | undefined,
-    clearInput: (focus?: boolean) => void,
-    clearMediaPreview: () => void,
-    clearVoiceDraft?: () => void,
-) {
-    const reply = replyingTo.value;
-    const contentWithVoice = voiceDraft ? await appendUploadedVoice(content, voiceDraft) : content;
-    const quotedContent = reply ? `[quote=${reply.id}][/quote]${contentWithVoice}` : contentWithVoice;
-    const transformedContent = await transformMentions(quotedContent, lookupUsersByName);
-    const meta = withOptionalImageMeta(imageMeta);
-
+function stageOptimisticMessage(draft: PreparedNewMessage): PendingDelivery {
     const user = userInfo.value;
     const { tempId, stableKey } = addOptimisticMessage(
-        transformedContent,
+        draft.content,
         { id: user.id, nickname: user.nickname, avatar: user.avatar },
-        reply ? Number(reply.id) : undefined,
-        reply ? { uid: Number(reply.uid), nickname: reply.user, avatar: reply.avatar, content: reply.text } : undefined,
-        meta
+        draft.replyToId,
+        draft.replyDetails,
+        draft.imageMeta,
     );
 
-    clearInput(true);
-    clearMediaPreview();
-    clearVoiceDraft?.();
+    return { tempId, stableKey, content: draft.content };
+}
+
+function clearSubmittedComposer(actions: ComposerActions) {
+    actions.clearInput(true);
+    actions.clearMediaPreview();
+    actions.clearVoiceDraft?.();
     clearDraft();
     cancelReplyOrEdit();
-
-    await dispatch(tempId, stableKey, transformedContent);
 }
 
 /**
@@ -108,7 +168,7 @@ async function submitNewMessage(
  * - 'sent' / 'unknown' → 保留 sending 气泡，由 WS 回流或看门狗对账，
  *   绝不在此重发，从根源杜绝"发两条一样的"。
  */
-async function dispatch(tempId: number, stableKey: string, content: string) {
+async function deliver({ tempId, stableKey, content }: PendingDelivery) {
     sendPendingMessage(stableKey, content);
     const outcome = await postChatMessage(content);
     if (outcome === 'rejected') {
@@ -130,7 +190,7 @@ export async function retryFailedMessage(tempId: number) {
         return;
     }
 
-    await dispatch(tempId, revived.stableKey, revived.content);
+    await deliver({ tempId, stableKey: revived.stableKey, content: revived.content });
 }
 
 export async function submitComposerMessage({
@@ -142,14 +202,18 @@ export async function submitComposerMessage({
     clearVoiceDraft,
 }: SubmitComposerMessageOptions) {
     const trimmedContent = content.trim();
+    const actions = { clearInput, clearMediaPreview, clearVoiceDraft };
 
     if (editingMessage.value) {
-        if (!trimmedContent) return;
-        await submitEdit(trimmedContent, imageMeta, clearInput);
+        const draft = await prepareEdit(trimmedContent, imageMeta);
+        if (draft) await submitEdit(draft, clearInput);
         return;
     }
 
-    if (!trimmedContent && !voiceDraft) return;
+    const draft = await prepareNewMessage(trimmedContent, imageMeta, voiceDraft);
+    if (!draft) return;
 
-    await submitNewMessage(trimmedContent, imageMeta, voiceDraft, clearInput, clearMediaPreview, clearVoiceDraft);
+    const pending = stageOptimisticMessage(draft);
+    clearSubmittedComposer(actions);
+    await deliver(pending);
 }

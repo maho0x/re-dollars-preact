@@ -12,19 +12,20 @@ const mocks = vi.hoisted(() => ({
         messages: [],
         replyForm: null,
     })),
+    sendPmReply: vi.fn(),
 }));
 
 vi.mock('@/services/bangumiPm/client', () => ({
     createPm: vi.fn(),
     fetchPmConversation: mocks.fetchPmConversation,
     fetchPmInbox: mocks.fetchPmInbox,
-    sendPmReply: vi.fn(),
+    sendPmReply: mocks.sendPmReply,
 }));
 
 import { isChatOpen } from './chatState';
 import { activeConversationId } from './conversations';
 import { chatLayoutReady, isNarrowLayout, mobileChatViewActive } from './ui';
-import { pmConversations, pmDetails, openPmConversationFromHref, openPmForUser, startPmPolling } from './bangumiPm';
+import { pmConversations, pmDetails, pmNewMessageIds, openPmConversationFromHref, openPmForUser, retryPmReply, startPmPolling, submitPmReply } from './bangumiPm';
 
 describe('Bangumi PM polling', () => {
     beforeEach(() => {
@@ -36,9 +37,11 @@ describe('Bangumi PM polling', () => {
         mobileChatViewActive.value = false;
         pmConversations.value = [];
         pmDetails.value = {};
+        pmNewMessageIds.value = new Set();
         mocks.fetchPmInbox.mockResolvedValue({ conversations: [], nextPageUrl: null });
         mocks.fetchPmInbox.mockClear();
         mocks.fetchPmConversation.mockClear();
+        mocks.sendPmReply.mockReset();
     });
 
     it('does not load the PM inbox while a narrow Re:Dollars chat view is active', async () => {
@@ -175,5 +178,141 @@ describe('Bangumi PM polling', () => {
         expect(activeConversationId.value).toBe('pm:88');
         expect(mocks.fetchPmInbox).toHaveBeenCalledOnce();
         expect(mocks.fetchPmConversation).toHaveBeenCalledWith('/pm/conversation/88.chii');
+    });
+
+    it('adds an optimistic PM reply and reconciles it with the sent detail', async () => {
+        pmDetails.value = {
+            '42': {
+                id: '42',
+                nickname: 'Peer',
+                username: 'peer',
+                avatar: 'peer.jpg',
+                messages: [],
+                replyForm: { action: '/pm/conversation/42.chii', fields: {} },
+            },
+        };
+        let resolveSend: (value: any) => void = () => {};
+        mocks.sendPmReply.mockReturnValue(new Promise(resolve => { resolveSend = resolve; }));
+
+        const pending = submitPmReply('42', 'hello');
+
+        const optimistic = pmDetails.value['42'].messages[0];
+        expect(optimistic).toMatchObject({
+            isSelf: true,
+            bodyText: 'hello',
+            state: 'sending',
+        });
+        expect(optimistic.id).toMatch(/^temp-/);
+        expect(pmNewMessageIds.value.has(optimistic.id)).toBe(true);
+
+        resolveSend({
+            status: 'sent',
+            detail: {
+                id: '42',
+                nickname: 'Peer',
+                username: 'peer',
+                avatar: 'peer.jpg',
+                messages: [{
+                    id: '99',
+                    isSelf: true,
+                    avatar: '',
+                    userHref: '/user/me',
+                    bodyHtml: 'hello',
+                    bodyText: 'hello',
+                    presentationText: 'hello',
+                    timestamp: optimistic.timestamp,
+                    timestampText: '刚刚',
+                }],
+                replyForm: { action: '/pm/conversation/42.chii', fields: {} },
+            },
+        });
+        await pending;
+
+        expect(pmDetails.value['42'].messages).toHaveLength(1);
+        expect(pmDetails.value['42'].messages[0].id).toBe('99');
+        expect(pmDetails.value['42'].messages[0]).toMatchObject({
+            stableKey: optimistic.stableKey,
+            state: 'sent',
+        });
+        expect(pmNewMessageIds.value.has('99')).toBe(false);
+    });
+
+    it('marks an optimistic PM reply failed when Bangumi rejects it and retries from the failed bubble', async () => {
+        pmDetails.value = {
+            '42': {
+                id: '42',
+                nickname: 'Peer',
+                username: 'peer',
+                avatar: 'peer.jpg',
+                messages: [],
+                replyForm: { action: '/pm/conversation/42.chii', fields: {} },
+            },
+        };
+        mocks.sendPmReply.mockResolvedValueOnce({ status: 'rejected', error: 'too fast' });
+
+        const result = await submitPmReply('42', 'hello');
+        const failed = pmDetails.value['42'].messages[0];
+
+        expect(result).toEqual({ status: 'rejected', error: 'too fast' });
+        expect(failed.state).toBe('failed');
+        expect(failed.timestampText).toBe('发送失败');
+
+        mocks.sendPmReply.mockResolvedValueOnce({
+            status: 'sent',
+            detail: {
+                id: '42',
+                nickname: 'Peer',
+                username: 'peer',
+                avatar: 'peer.jpg',
+                messages: [{
+                    id: '100',
+                    isSelf: true,
+                    avatar: '',
+                    userHref: '/user/me',
+                    bodyHtml: 'hello',
+                    bodyText: 'hello',
+                    presentationText: 'hello',
+                    timestamp: failed.timestamp,
+                    timestampText: '刚刚',
+                }],
+                replyForm: { action: '/pm/conversation/42.chii', fields: {} },
+            },
+        });
+
+        await retryPmReply('42', failed.id);
+
+        expect(mocks.sendPmReply).toHaveBeenLastCalledWith(expect.anything(), 'hello');
+        expect(pmDetails.value['42'].messages).toHaveLength(1);
+        expect(pmDetails.value['42'].messages[0].id).toBe('100');
+    });
+
+    it('keeps unknown PM replies pending when a forced refresh cannot confirm them', async () => {
+        pmDetails.value = {
+            '42': {
+                id: '42',
+                nickname: 'Peer',
+                username: 'peer',
+                avatar: 'peer.jpg',
+                messages: [],
+                replyForm: { action: '/pm/conversation/42.chii', fields: {} },
+            },
+        };
+        mocks.sendPmReply.mockResolvedValueOnce({ status: 'unknown', error: 'unknown' });
+        mocks.fetchPmConversation.mockResolvedValueOnce({
+            id: '42',
+            nickname: 'Peer',
+            username: 'peer',
+            avatar: 'peer.jpg',
+            messages: [],
+            replyForm: { action: '/pm/conversation/42.chii', fields: {} },
+        } as any);
+
+        await submitPmReply('42', 'hello');
+
+        expect(pmDetails.value['42'].messages).toHaveLength(1);
+        expect(pmDetails.value['42'].messages[0]).toMatchObject({
+            bodyText: 'hello',
+            state: 'sending',
+        });
     });
 });

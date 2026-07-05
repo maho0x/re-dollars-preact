@@ -4,6 +4,12 @@ import { blockedUsers } from '@/stores/user';
 import { confirmSentMessage, fetchMessageContext } from '@/utils/api/messages';
 import { normalizeForMatch } from '@/utils/messageMatch';
 import { canGroupAdjacentMessages } from '@/utils/messageGrouping';
+import {
+    createOptimisticStableKey,
+    optimisticTimestamp,
+    takeOptimisticMatchFromMap,
+    type OptimisticMessageAdapter,
+} from '@/utils/optimisticMessages';
 import { updateSignalMap, updateSignalSet } from '@/utils/signalMap';
 import {
     historyFullyLoaded,
@@ -57,6 +63,13 @@ const pendingTimeouts = new Map<number, ReturnType<typeof setTimeout>>();
 const PENDING_VERIFY_MS = 8000;
 let nextOptimisticId = -1;
 
+const dollarsOptimisticAdapter: OptimisticMessageAdapter<Message> = {
+    state: message => message.state,
+    stableKey: message => message.stableKey,
+    contentKey: message => normalizeForMatch(message.message),
+    senderKey: message => String(message.uid),
+};
+
 function clearPendingTimer(tempId: number) {
     const timeout = pendingTimeouts.get(tempId);
     if (timeout) {
@@ -100,36 +113,11 @@ function takeOptimisticMatch(
     msg: Message,
     tempId?: string,
 ): { matchedId?: number; stableKey?: string } {
-    if (tempId) {
-        for (const [id, m] of map) {
-            if (m.state === 'sending' && m.stableKey === tempId) {
-                map.delete(id);
-                return { matchedId: id, stableKey: m.stableKey };
-            }
-        }
-    }
-
-    const target = normalizeForMatch(msg.message);
-    let matchedId: number | undefined;
-    for (const [id, m] of map) {
-        if (
-            m.state === 'sending' &&
-            String(m.uid) === String(msg.uid) &&
-            normalizeForMatch(m.message) === target &&
-            // 乐观 id 为递减负数，越接近 0 越早创建；FIFO 取最早一条。
-            (matchedId === undefined || id > matchedId)
-        ) {
-            matchedId = id;
-        }
-    }
-
-    if (matchedId !== undefined) {
-        const stableKey = map.get(matchedId)?.stableKey;
-        map.delete(matchedId);
-        return { matchedId, stableKey };
-    }
-
-    return {};
+    return takeOptimisticMatchFromMap(map, msg, dollarsOptimisticAdapter, {
+        stableKey: tempId,
+        // 乐观 id 为递减负数，越接近 0 越早创建；FIFO 取最早一条。
+        prefer: (candidate, current) => candidate > current,
+    });
 }
 
 // ============================================================================
@@ -219,17 +207,15 @@ export function addOptimisticMessage(
     imageMeta?: Record<string, { width: number; height: number }>
 ): { tempId: number; stableKey: string } {
     const tempId = nextOptimisticId--;
-    const stableKey = `temp-${Math.random().toString(36).slice(2)}`;
+    const stableKey = createOptimisticStableKey();
 
-    let currentTs = Math.floor(Date.now() / 1000);
     const ids = messageIds.peek();
+    let lastMsgTs = 0;
     if (ids.length > 0) {
         const lastMsgId = ids[ids.length - 1];
-        const lastMsgTs = messageMap.peek().get(lastMsgId)?.timestamp || 0;
-        if (currentTs < lastMsgTs) {
-            currentTs = lastMsgTs;
-        }
+        lastMsgTs = messageMap.peek().get(lastMsgId)?.timestamp || 0;
     }
+    const currentTs = optimisticTimestamp(lastMsgTs);
 
     const optimisticMsg: Message = {
         id: tempId,
@@ -279,9 +265,9 @@ export function retryMessage(tempId: number): { content: string; stableKey: stri
     if (!msg || msg.state !== 'failed') return null;
 
     const content = msg.message;
-    const stableKey = msg.stableKey || `temp-${Math.random().toString(36).slice(2)}`;
+    const stableKey = msg.stableKey || createOptimisticStableKey();
 
-    updateSignalMap(messageMap, map => map.set(tempId, { ...msg, state: 'sending' }));
+    updateSignalMap(messageMap, map => map.set(tempId, { ...msg, stableKey, state: 'sending' }));
     armPendingTimer(tempId);
 
     return { content, stableKey };

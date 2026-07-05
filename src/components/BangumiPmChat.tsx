@@ -13,12 +13,14 @@ import {
     pmDetailError,
     pmDetailLoading,
     pmDetails,
+    pmNewMessageIds,
+    retryPmReply,
     submitNewPm,
     submitPmReply,
 } from '@/stores/bangumiPm';
 import { showUserProfile, toggleSmileyPanel } from '@/stores/ui';
 import { settings } from '@/stores/user';
-import { COLLAPSE_MAX_HEIGHT } from '@/utils/constants';
+import { COLLAPSE_MAX_HEIGHT, NEW_MESSAGE_ANIMATION } from '@/utils/constants';
 import { formatDate } from '@/utils/format';
 import { getFloatingDateLabel, isNearScrollBottom } from '@/utils/floatingDate';
 import { iconFile, iconPhoto } from '@/utils/icons';
@@ -64,13 +66,16 @@ function PmMessageItem({
     nickname,
     isGrouped,
     isGroupedWithNext,
+    onRetry,
 }: {
     message: BangumiPmMessage;
     nickname: string;
     isGrouped: boolean;
     isGroupedWithNext: boolean;
+    onRetry?: (messageId: string) => void;
 }) {
     const textContentRef = useRef<HTMLDivElement>(null);
+    const [isNew, setIsNew] = useState(() => pmNewMessageIds.peek().has(message.id));
     const presentationText = message.presentationText || message.bodyText;
     const isSticker = isStickerMessage(presentationText, false, undefined);
     const { isExpanded, isCollapsible, shouldCollapse, toggleExpanded } = useCollapsibleMessage(
@@ -99,6 +104,19 @@ function PmMessageItem({
     const fullTimeText = message.timestamp === null
         ? message.timestampText
         : formatDate(message.timestamp, 'full');
+
+    useEffect(() => {
+        if (isNew) {
+            const timer = setTimeout(() => setIsNew(false), NEW_MESSAGE_ANIMATION);
+            return () => clearTimeout(timer);
+        }
+    }, [isNew]);
+
+    const handleBubbleClick = (event: MouseEvent) => {
+        if (message.state !== 'failed') return;
+        event.stopPropagation();
+        onRetry?.(message.id);
+    };
     const handleAvatarClick = (event: MouseEvent) => {
         const username = message.userHref.match(/^\/user\/(.+)$/)?.[1];
         if (!username) return;
@@ -109,7 +127,7 @@ function PmMessageItem({
 
     return (
         <div
-            class={`chat-message dollars-pm-message${message.isSelf ? ' self' : ''}${isGrouped ? ' is-grouped-with-prev' : ''}${isGroupedWithNext ? ' is-grouped-with-next' : ''}`}
+            class={`chat-message dollars-pm-message${message.isSelf ? ' self' : ''}${isGrouped ? ' is-grouped-with-prev' : ''}${isGroupedWithNext ? ' is-grouped-with-next' : ''}${isNew ? ' new-message' : ''}${message.state === 'sending' ? ' pending' : ''}${message.state === 'failed' ? ' failed' : ''}`}
             data-timestamp={message.timestamp ?? undefined}
         >
             <a class="dollars-pm-avatar-link" href={message.userHref || '#'} target="_blank" rel="noopener noreferrer" onClick={handleAvatarClick}>
@@ -121,7 +139,11 @@ function PmMessageItem({
                         {nickname}
                     </a>
                 </span>
-                <div class={`bubble${isSticker ? ' sticker-mode' : ''}${timestampMode === 'trailing' ? ' has-trailing-timestamp' : ''}${timestampMode === 'stacked' ? ' has-stacked-timestamp' : ''}`}>
+                <div
+                    class={`bubble${isSticker ? ' sticker-mode' : ''}${timestampMode === 'trailing' ? ' has-trailing-timestamp' : ''}${timestampMode === 'stacked' ? ' has-stacked-timestamp' : ''}`}
+                    onClick={message.state === 'failed' ? handleBubbleClick : undefined}
+                    style={message.state === 'failed' ? { cursor: 'pointer' } : undefined}
+                >
                     <span class="bubble-nickname">{nickname}</span>
                     <div
                         ref={textContentRef}
@@ -232,6 +254,7 @@ function PmConversationView({ id }: { id: string }) {
     const [isAttachMenuOpen, setIsAttachMenuOpen] = useState(false);
     const [isAttachMenuClosing, setIsAttachMenuClosing] = useState(false);
     const [attachMenuPosition, setAttachMenuPosition] = useState<AttachMenuPosition | null>(null);
+    const [inputHeight, setInputHeight] = useState(80);
     const listRef = useRef<HTMLDivElement>(null);
     const composerRef = useRef<HTMLDivElement>(null);
     const composerProxyRef = useRef<HTMLTextAreaElement>(null);
@@ -284,6 +307,18 @@ function PmConversationView({ id }: { id: string }) {
     useEffect(() => {
         if (!detail) void loadPmDetail(id);
     }, [id]);
+
+    useEffect(() => {
+        const container = inputContainerRef.current;
+        if (!container) return;
+
+        const updateHeight = () => setInputHeight(container.offsetHeight);
+        const observer = new ResizeObserver(updateHeight);
+        observer.observe(container);
+        updateHeight();
+
+        return () => observer.disconnect();
+    }, []);
 
     useEffect(() => {
         const lastId = detail?.messages[detail.messages.length - 1]?.id || '';
@@ -373,21 +408,35 @@ function PmConversationView({ id }: { id: string }) {
         if (!content || sending || isUploading) return;
         setSending(true);
         setSendError('');
-        const result = await submitPmReply(id, content);
+        const pending = submitPmReply(id, content);
+        inputControllerRef.current?.setValue('', { focus: true });
+        setPreviewMedia([]);
+        const result = await pending;
         setSending(false);
         if (result.status === 'sent') {
-            inputControllerRef.current?.setValue('', { focus: true });
-            setPreviewMedia([]);
             return;
         }
         setSendError(result.error);
+    };
+
+    const retry = async (messageId: string) => {
+        if (sending || isUploading) return;
+        setSending(true);
+        setSendError('');
+        const result = await retryPmReply(id, messageId);
+        setSending(false);
+        if (result.status !== 'sent') setSendError(result.error);
     };
 
     let previousTopic = '';
     return (
         <div class="dollars-pm-view">
             <PmFloatingDate listRef={listRef} />
-            <div class="dollars-pm-message-scroll" ref={listRef}>
+            <div
+                class="dollars-pm-message-scroll"
+                ref={listRef}
+                style={{ paddingBottom: `${inputHeight + 20}px` }}
+            >
                 {isInitialLoading && (
                     <div class="pm-empty-state">正在加载短信…</div>
                 )}
@@ -403,13 +452,14 @@ function PmConversationView({ id }: { id: string }) {
                     const isGrouped = arePmMessagesGrouped(displayDetail.messages[index - 1], message);
                     const isGroupedWithNext = arePmMessagesGrouped(message, displayDetail.messages[index + 1]);
                     return (
-                        <div key={message.id}>
+                        <div key={message.stableKey || message.id}>
                             {showTopic && <div class="dollars-pm-topic">{message.topic}</div>}
                             <PmMessageItem
                                 message={message}
                                 nickname={displayDetail.nickname}
                                 isGrouped={isGrouped}
                                 isGroupedWithNext={isGroupedWithNext}
+                                onRetry={retry}
                             />
                         </div>
                     );
